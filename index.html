@@ -1,9 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stratagem Hero Clone</title>
+    <link rel="stylesheet" href="style.css">
+</head>
 <body>
     <div id="stageFrame" class="game-container"> 
         
         <!-- HUD Elements -->
         <div class="hud">
-            <div>Wave/Stage: <span id="wave">1</span></div>
+            <div>Wave: <span id="wave">1</span></div>
             <div>Time: <span id="time">10</span></div>
             <div>Score: <span id="score">0</span></div>
             <div>Combo: <span id="combo">0</span></div>
@@ -37,25 +45,25 @@
 
         <!-- Mode: Combat QTE -->
         <div id="qteContainer" class="mode-container">
-            <h3 id="qtePrompt" style="color: #ff4444;">Warning: Heavy Armor Detected!</h3>
-            <div id="qteButtons" style="display:flex; flex-direction:column; gap:10px; width:100%; margin-top:20px;"></div>
+            <h3 id="qtePrompt" style="color: #ff4444; margin: 0 0 10px 0;">Warning: Heavy Armor Detected!</h3>
+            <div id="qteButtons" style="display:flex; flex-direction:column; gap:8px; width:100%;"></div>
         </div>
 
         <!-- Mode: Grid Targeting -->
         <div id="gridContainer" class="mode-container">
-            <h2 id="gridPrompt">Target: C3</h2>
+            <h2 id="gridPrompt" style="margin: 0 0 10px 0;">Target: C3</h2>
             <div id="gridBoard" class="grid-board"></div>
         </div>
 
         <!-- Mode: Automaton Decoder -->
         <div id="decoderContainer" class="mode-container">
-            <h3 style="color: #ff4444;">DECODE CIPHER</h3>
+            <h3 style="color: #ff4444; margin: 0 0 15px 0;">DECODE CIPHER</h3>
             <div id="decoderBoard" class="decoder-board"></div>
         </div>
 
         <!-- Mode: Pump Control (Pipes) -->
         <div id="pipeContainer" class="mode-container">
-            <h3 style="color: #44ff44;">ALIGN FLOW</h3>
+            <h3 style="color: #44ff44; margin: 0 0 10px 0;">ALIGN FLOW</h3>
             <div id="pipeBoard" class="pipe-board"></div>
         </div>
         
@@ -71,12 +79,12 @@
 
         <!-- Main Menu Overlay -->
         <div id="mainMenuOverlay" class="overlay">
-            <h1 style="margin-bottom: 5px;">SUPER EARTH OS</h1>
-            <p style="margin-top: 0; font-size: 0.9em; color: #aaa;"><span id="totalCount">0</span> Stratagems Loaded</p>
+            <h1 style="margin: 0 0 5px 0;">SUPER EARTH OS</h1>
+            <p style="margin: 0 0 15px 0; font-size: 0.85em; color: #aaa;"><span id="totalCount">0</span> Stratagems Loaded</p>
             
             <div class="highscore-panel">
-                <div>Hero Best: <span id="hsHero">0</span> | QTE Best: <span id="hsQTE">0</span> | Critical Best: <span id="hsCritical">0</span></div>
-                <div>Grid Best: <span id="hsGrid">0</span> | Decode Best: <span id="hsDecoder">0</span> | Pump Best: <span id="hsPipes">0</span></div>
+                <div>Hero: <span id="hsHero">0</span> | QTE: <span id="hsQTE">0</span> | Critical: <span id="hsCritical">0</span></div>
+                <div>Grid: <span id="hsGrid">0</span> | Decode: <span id="hsDecoder">0</span> | Pump: <span id="hsPipes">0</span></div>
             </div>
 
             <div class="menu-grid">
@@ -100,3 +108,4 @@
     </div>
     <script src="script.js"></script>
 </body>
+</html>
