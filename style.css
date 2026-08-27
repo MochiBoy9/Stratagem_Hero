@@ -1,25 +1,260 @@
-/* Multi-Mode Framework */
-.mode-container { display: none; flex-direction: column; align-items: center; justify-content: center; width: 100%; min-height: 250px; }
-.mode-container.active-mode { display: flex; }
-.menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; width: 100%; max-width: 350px; }
-.menu-btn { font-size: 0.9em; padding: 12px; margin: 0; }
-.highscore-panel { background: #111; padding: 10px; border-radius: 5px; border: 1px solid #444; font-size: 0.8em; margin-bottom: 20px; text-align: center; line-height: 1.5; color: #ccc;}
+/* Base Styles */
+body {
+    background-color: #1a1a1a;
+    color: #ffd700;
+    font-family: 'Courier New', Courier, monospace;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+}
+
+.game-container {
+    position: relative; 
+    text-align: center;
+    background: #2a2a2a;
+    padding: 30px;
+    border-radius: 10px;
+    border: 3px solid #ffd700;
+    overflow: hidden;
+    min-width: 420px;
+    max-width: 480px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Heads Up Display */
+.hud {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+    font-size: 0.85em;
+    font-weight: bold;
+}
+
+.wave-timer-track {
+    width: 100%;
+    height: 8px;
+    background: #111;
+    border: 1px solid #444;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 2px 0 16px;
+}
+
+.wave-timer-fill {
+    height: 100%;
+    width: 100%;
+    background: #ffd700;
+    transition: width 0.1s linear, background-color 0.2s;
+}
+
+.wave-timer-fill.low {
+    background: #ff4444;
+}
+
+/* Mode Container Visibilities */
+.mode-container {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 240px;
+}
+
+.mode-container.active-mode {
+    display: flex;
+}
+
+/* Stratagem Hero Elements */
+.category-badge {
+    display: inline-block;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-weight: bold;
+    margin-bottom: 5px;
+    background: #444;
+}
+.cat-offensive { color: #ff4444; }
+.cat-supply { color: #4444ff; }
+.cat-defensive { color: #44ff44; }
+.cat-mission { color: #ffff44; }
+
+.stratagem-icon-wrap {
+    position: relative;
+    width: 72px;
+    height: 72px;
+    margin: 8px auto 4px;
+}
+
+.stratagem-icon {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: 8px;
+    border: 2px solid #ffd700;
+    background: #111;
+    display: none;
+}
+.stratagem-icon.loaded { display: block; }
+
+.stratagem-icon-fallback {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    border: 2px dashed #665400;
+    font-size: 1.6em;
+    font-weight: bold;
+    color: #665400;
+}
+.stratagem-icon-fallback.hidden { display: none; }
+
+.arrows {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin: 15px 0;
+    min-height: 50px;
+}
+
+.arrow-icon {
+    width: 45px;
+    height: 45px;
+    opacity: 0.3;
+}
+.arrow-svg polygon { fill: #ffd700; }
+.dir-right .arrow-svg { transform: rotate(0deg); }
+.dir-down .arrow-svg { transform: rotate(90deg); }
+.dir-left .arrow-svg { transform: rotate(180deg); }
+.dir-up .arrow-svg { transform: rotate(-90deg); }
+
+.arrow-icon.next { opacity: 0.6; }
+.arrow-icon.completed {
+    opacity: 1.0;
+    filter: drop-shadow(0px 0px 5px #ffd700);
+}
+
+.next-preview-container {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    margin-top: 10px;
+    min-height: 50px;
+}
+.next-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-size: 0.8em;
+    color: #aaa;
+    max-width: 100px;
+}
+.preview-icon {
+    width: 35px;
+    height: 35px;
+    object-fit: contain;
+    border-radius: 4px;
+    border: 1px solid #ffd700;
+    background: #111;
+    margin-bottom: 5px;
+    display: none;
+}
+.preview-icon.loaded { display: block; }
+
+/* Overlays & Menus */
+.overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(26, 26, 26, 0.96);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.menu-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    width: 100%;
+}
+.menu-btn {
+    font-size: 0.85em;
+    padding: 10px;
+    margin: 0;
+    width: 100%;
+}
+
+.highscore-panel {
+    background: #111;
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #ffd700;
+    font-size: 0.75em;
+    margin-bottom: 15px;
+    text-align: center;
+    line-height: 1.6;
+    color: #ccc;
+    width: 100%;
+    box-sizing: border-box;
+}
 .highscore-panel span { color: #ffd700; font-weight: bold; }
 
-/* Grid Targeting */
+/* New Puzzle Game Layouts */
 .grid-board { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; margin-top: 10px; }
 .grid-cell { width: 45px; height: 45px; background: #333; border: 2px solid #555; color: #aaa; font-weight: bold; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.1s; }
 .grid-cell:hover { background: #ffd700; color: #111; border-color: #ffd700; }
 
-/* Automaton Decoder */
 .decoder-board { display: flex; gap: 8px; font-size: 1.8em; margin-bottom: 20px; }
-.decode-char { width: 45px; height: 45px; border: 2px solid #555; display: flex; align-items: center; justify-content: center; background: #111;}
+.decode-char { width: 45px; height: 45px; border: 2px solid #555; display: flex; align-items: center; justify-content: center; background: #111; }
 .decode-char.active { border-color: #ffd700; color: #ffd700; box-shadow: 0 0 10px #ffd700; }
 .decode-char.done { border-color: #ff4444; color: #ff4444; }
 
-/* Pump Control */
-.pipe-board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; background: #222; padding: 8px; border: 2px solid #555; border-radius: 5px;}
-.pipe-cell { width: 60px; height: 60px; background: #333; display: flex; align-items: center; justify-content: center; font-size: 2.5em; cursor: pointer; transition: transform 0.15s ease; user-select: none; color: #ffd700;}
+.pipe-board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; background: #222; padding: 8px; border: 2px solid #555; border-radius: 5px; }
+.pipe-cell { width: 60px; height: 60px; background: #333; display: flex; align-items: center; justify-content: center; font-size: 2.5em; cursor: pointer; transition: transform 0.15s ease; user-select: none; color: #ffd700; }
 .pipe-cell.blocked { color: #ff4444; background: #1a1a1a; cursor: not-allowed; }
-.qte-btn { padding: 12px; font-size: 0.9em; text-align: left; background: #222; color: #ffd700; border: 1px solid #ffd700; transition: 0.1s; }
+
+.qte-btn { padding: 10px; font-size: 0.85em; text-align: left; background: #222; color: #ffd700; border: 1px solid #ffd700; transition: 0.1s; width: 100%; box-sizing: border-box; }
 .qte-btn:hover { background: #ffd700; color: #111; }
+
+/* D-Pad & Global Buttons */
+button {
+    background: #ffd700;
+    color: #1a1a1a;
+    border: none;
+    padding: 10px 20px;
+    font-size: 1em;
+    font-family: inherit;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 5px;
+    margin-top: 10px;
+}
+button:hover { background: #ffea66; }
+
+.dpad { margin-top: 15px; }
+.dpad-row { display: flex; justify-content: center; gap: 5px; margin-top: 5px; }
+.dpad-btn { padding: 10px 15px; margin: 0; font-size: 1em; }
+
+/* Utility Classes */
+.hidden { display: none !important; }
+.flash-error { background: #5a1a1a !important; }
+.flash-success { background: #1a4a1a !important; }
+.time-low { border-color: #ff4444 !important; }
+
+.shake { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
+@keyframes shake {
+    10%, 90% { transform: translate3d(-1px, 0, 0); }
+    20%, 80% { transform: translate3d(2px, 0, 0); }
+    30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+    40%, 60% { transform: translate3d(4px, 0, 0); }
+}
