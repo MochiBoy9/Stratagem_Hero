@@ -1,2 +1,2 @@
-# Stratagem_Hero
-A web-based version of the Stratagem Hero from Helldivers 2.
+# Stratagem Hero
+A fake, web-based version of the Stratagem Hero game you can find on the Super Destroyers. 
