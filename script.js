@@ -1,5 +1,5 @@
 /* ==========================================================================
-   SUPER EARTH OS — Multi-Mode Stratagem Game
+   STRATAGEM HERO — game logic
    ========================================================================== */
 
 const STRATAGEMS = [
@@ -121,245 +121,518 @@ const CATEGORY_META = {
   mission: { label: "Mission", className: "cat-mission" },
 };
 
-/* --- Global State --- */
-const TIME_ADD = 2.5;         
-const MAX_SPEED = 3.5;
-let currentMode = "hero";
+/* ---------------------------------------------------------------------
+   2. CONSTANTS & DOM REFERENCES
+   --------------------------------------------------------------------- */
+const TIME_ADD_ON_CLEAR = 2;         
+const SPEED_STEP_PER_WAVE = 0.08;
+const MAX_SPEED_MULTIPLIER = 3.5;
+const LOW_TIME_THRESHOLD = 3;
+const TICK_INTERVAL_MS = 100;
+const BASE_TRANSITION_DELAY_MS = 260;
+const MIN_TRANSITION_DELAY_MS = 110;
+
+const arrowContainer = document.getElementById("arrow-container");
+const scoreEl = document.getElementById("score");
+const comboEl = document.getElementById("combo");
+const clearedEl = document.getElementById("cleared");
+const sessionBestEl = document.getElementById("sessionBest");
+const timeEl = document.getElementById("time");
+const waveEl = document.getElementById("wave");
+const waveTimerFill = document.getElementById("waveTimerFill");
+const categoryBadge = document.getElementById("categoryBadge");
+const stratagemName = document.getElementById("stratagemName");
+const stageFrame = document.getElementById("stageFrame");
+const idleOverlay = document.getElementById("idleOverlay");
+const gameOverOverlay = document.getElementById("gameOverOverlay");
+const startBtn = document.getElementById("startBtn");
+const restartBtn = document.getElementById("restartBtn");
+const totalCountEl = document.getElementById("totalCount");
+const finalScoreEl = document.getElementById("finalScore");
+const finalWaveEl = document.getElementById("finalWave");
+const finalComboEl = document.getElementById("finalCombo");
+const finalClearedEl = document.getElementById("finalCleared");
+const finalSessionBestEl = document.getElementById("finalSessionBest");
+const dpad = document.getElementById("dpad");
+
+// Icon references
+const stratagemIcon = document.getElementById("stratagemIcon");
+const stratagemIconFallback = document.getElementById("stratagemIconFallback");
+
+// Preview DOM elements
+const next1El = document.getElementById("next1");
+const next1Name = document.getElementById("next1Name");
+const next1Icon = document.getElementById("next1Icon");
+
+const next2El = document.getElementById("next2");
+const next2Name = document.getElementById("next2Name");
+const next2Icon = document.getElementById("next2Icon");
+
+/* ---------------------------------------------------------------------
+   3. GAME STATE
+   --------------------------------------------------------------------- */
 let gameState = "idle";
-let score = 0, combo = 0, cleared = 0, waveNumber = 1;
-let waveTimeMax = 12, waveTimeLeft = 12, timerId = null;
-let activeTarget = null, currentStep = 0;
-let highscores = { hero: 0, critical: 0, qte: 0, grid: 0, decoder: 0, pipes: 0 };
+let bag = [];
+let activeWaveQueue = [];
+let currentStratagem = null;
+let currentStep = 0;
+let score = 0;
+let combo = 0;
+let bestCombo = 0;
+let cleared = 0;
+let sessionBest = 0;
+let timerId = null;
 
-/* --- DOM Elements --- */
-const UI = {
-  score: document.getElementById("score"), time: document.getElementById("time"), 
-  wave: document.getElementById("wave"), timerFill: document.getElementById("waveTimerFill"),
-  mainMenu: document.getElementById("mainMenuOverlay"), gameOver: document.getElementById("gameOverOverlay"),
-  containers: document.querySelectorAll(".mode-container")
-};
+let waveNumber = 1;
+let waveTimeMax = 10;
+let waveTimeLeft = 10;
+let waveTimeAllotted = 10; // For fill calculations
+let speedMultiplier = 1;
 
-/* --- Audio Engine (Reusing yours) --- */
+/* ---------------------------------------------------------------------
+   4. AUDIO
+   --------------------------------------------------------------------- */
 let audioCtx = null;
-function playTone(f, d, t="square", v=0.1, del=0) {
-  if(!audioCtx) { const A = window.AudioContext||window.webkitAudioContext; if(!A)return; audioCtx = new A(); }
-  if(audioCtx.state==="suspended") audioCtx.resume();
-  const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
-  osc.type = t; osc.frequency.value = f; osc.connect(gain); gain.connect(audioCtx.destination);
-  const start = audioCtx.currentTime + del;
-  gain.gain.setValueAtTime(v, start); gain.gain.exponentialRampToValueAtTime(0.001, start + d);
-  osc.start(start); osc.stop(start + d + 0.02);
+
+function ensureAudioCtx() {
+  if (!audioCtx) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return null;
+    audioCtx = new AudioContextClass();
+  }
+  if (audioCtx.state === "suspended") audioCtx.resume();
+  return audioCtx;
 }
+
+function playTone({ freq = 440, duration = 0.08, type = "square", volume = 0.15, delay = 0 }) {
+  const ctx = ensureAudioCtx();
+  if (!ctx) return;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  const startTime = ctx.currentTime + delay;
+  gain.gain.setValueAtTime(volume, startTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+  osc.start(startTime);
+  osc.stop(startTime + duration + 0.02);
+}
+
 const sfx = {
-  tick:()=>playTone(880,0.04,"square",0.05), wrong:()=>playTone(130,0.2,"sawtooth",0.15),
-  correct:()=>playTone(600,0.08), complete:()=>playTone(800,0.2)
+  correctStep(stepIndex) { playTone({ freq: 440 + stepIndex * 45, duration: 0.07, type: "square", volume: 0.12 }); },
+  wrong() { playTone({ freq: 130, duration: 0.2, type: "sawtooth", volume: 0.18 }); },
+  complete() {
+    playTone({ freq: 523.25, duration: 0.09, volume: 0.14 });
+    playTone({ freq: 659.25, duration: 0.09, volume: 0.14, delay: 0.08 });
+    playTone({ freq: 784.0, duration: 0.16, volume: 0.16, delay: 0.16 });
+  },
+  tick() { playTone({ freq: 880, duration: 0.04, volume: 0.07 }); },
+  start() {
+    playTone({ freq: 220, duration: 0.1, volume: 0.15 });
+    playTone({ freq: 440, duration: 0.16, volume: 0.15, delay: 0.1 });
+  },
+  waveUp() {
+    playTone({ freq: 659.25, duration: 0.07, volume: 0.12 });
+    playTone({ freq: 880, duration: 0.1, volume: 0.12, delay: 0.06 });
+  },
+  gameOver() {
+    playTone({ freq: 392, duration: 0.16, volume: 0.15 });
+    playTone({ freq: 330, duration: 0.16, volume: 0.15, delay: 0.15 });
+    playTone({ freq: 261.63, duration: 0.32, volume: 0.15, delay: 0.3 });
+  },
 };
 
-/* --- Game Loop --- */
-function openMenu() {
-  gameState = "idle"; clearInterval(timerId);
-  UI.mainMenu.classList.remove("hidden"); UI.gameOver.classList.add("hidden");
-  Object.keys(highscores).forEach(k => document.getElementById(`hs${k.charAt(0).toUpperCase()+k.slice(1)}`).textContent = highscores[k]);
+/* ---------------------------------------------------------------------
+   5. BAG RANDOMIZER
+   --------------------------------------------------------------------- */
+function refillBag() {
+  bag = STRATAGEMS.map((_, i) => i);
+  for (let i = bag.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [bag[i], bag[j]] = [bag[j], bag[i]];
+  }
 }
 
-document.querySelectorAll(".menu-btn").forEach(btn => {
-  btn.addEventListener("click", (e) => {
-    currentMode = e.target.dataset.mode;
-    startGame();
-  });
-});
+function drawStratagem() {
+  if (bag.length === 0) refillBag();
+  return STRATAGEMS[bag.pop()];
+}
 
-document.getElementById("restartBtn").addEventListener("click", startGame);
-document.getElementById("menuBtn").addEventListener("click", openMenu);
+/* ---------------------------------------------------------------------
+   6. STRATAGEM ICON — LOCAL FOLDER LOOKUP (Queue Compatible)
+   --------------------------------------------------------------------- */
+const ICON_FOLDER = "Stratagem/";
+const ICON_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "svg", "gif"];
+const MANIFEST_URL = `${ICON_FOLDER}manifest.json`;
+const MANIFEST_FETCH_TIMEOUT_MS = 1500;
+
+let manifest = null;
+let manifestLoaded = false;
+let manifestLoadingPromise = null;
+
+// Multi-token tracker so async loaders don't overwrite each other
+const iconTokens = { main: 0, next1: 0, next2: 0 };
+
+function loadManifest() {
+  if (manifestLoadingPromise) return manifestLoadingPromise;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), MANIFEST_FETCH_TIMEOUT_MS);
+  manifestLoadingPromise = fetch(MANIFEST_URL, { signal: controller.signal })
+    .then((res) => (res.ok ? res.json() : null))
+    .then((json) => { manifest = json && typeof json === "object" ? json : null; })
+    .catch(() => { manifest = null; })
+    .finally(() => {
+      manifestLoaded = true;
+      clearTimeout(timeout);
+    });
+  return manifestLoadingPromise;
+}
+
+function slugVariants(name) {
+  const trimmed = name.trim();
+  const underscored = trimmed.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  const hyphenated = trimmed.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  const compact = trimmed.replace(/[^A-Za-z0-9]+/g, "");
+  return [...new Set([underscored, hyphenated, compact])];
+}
+
+function candidateUrls(stratagem) {
+  const urls = [];
+  const manifestName = manifest && manifest[stratagem.name];
+  if (manifestName) urls.push(`${ICON_FOLDER}${manifestName}`);
+  for (const variant of slugVariants(stratagem.name)) {
+    for (const ext of ICON_EXTENSIONS) {
+      urls.push(`${ICON_FOLDER}${variant}.${ext}`);
+    }
+  }
+  return urls;
+}
+
+function applyIconToElement(stratagem, imgEl, fallbackEl, slotKey) {
+  iconTokens[slotKey]++;
+  const myToken = iconTokens[slotKey];
+
+  imgEl.classList.remove("loaded");
+  imgEl.removeAttribute("src");
+  if(fallbackEl) {
+      fallbackEl.textContent = stratagem.name.trim().charAt(0).toUpperCase() || "?";
+      fallbackEl.classList.remove("hidden");
+  }
+
+  const start = () => {
+    if (myToken !== iconTokens[slotKey]) return;
+    imgEl.alt = stratagem.name;
+    imgEl.title = stratagem.name;
+    tryNextCandidate(candidateUrls(stratagem), 0, myToken, imgEl, fallbackEl, slotKey);
+  };
+
+  if (manifestLoaded) start();
+  else loadManifest().then(start);
+}
+
+function tryNextCandidate(urls, index, token, imgEl, fallbackEl, slotKey) {
+  if (token !== iconTokens[slotKey]) return;
+  if (index >= urls.length) return;
+
+  const probe = new Image();
+  probe.onload = () => {
+    if (token !== iconTokens[slotKey]) return;
+    imgEl.src = urls[index];
+    imgEl.classList.add("loaded");
+    if(fallbackEl) fallbackEl.classList.add("hidden");
+  };
+  probe.onerror = () => tryNextCandidate(urls, index + 1, token, imgEl, fallbackEl, slotKey);
+  probe.src = urls[index];
+}
+
+/* ---------------------------------------------------------------------
+   7. DIFFICULTY & WAVES
+   --------------------------------------------------------------------- */
+function speedForWave(wave) {
+  return Math.min(MAX_SPEED_MULTIPLIER, 1 + (wave - 1) * SPEED_STEP_PER_WAVE);
+}
+
+function transitionDelayForWave(wave) {
+  return Math.max(MIN_TRANSITION_DELAY_MS, BASE_TRANSITION_DELAY_MS - wave * 6);
+}
+
+function generateWave() {
+  let stratagemCount;
+  if (waveNumber % 5 === 0) {
+    stratagemCount = Math.floor(Math.random() * 7) + 9; // 9 to 15
+    waveTimeMax = 15;
+  } else {
+    stratagemCount = Math.floor(Math.random() * 4) + 5; // 5 to 8
+    waveTimeMax = 10;
+  }
+
+  waveTimeLeft = waveTimeMax;
+  waveTimeAllotted = waveTimeMax;
+  activeWaveQueue = [];
+  
+  for (let i = 0; i < stratagemCount; i++) {
+    activeWaveQueue.push(drawStratagem());
+  }
+  
+  currentStratagem = activeWaveQueue.shift();
+  speedMultiplier = speedForWave(waveNumber);
+  
+  renderSequence();
+  renderPreviews();
+}
+
+/* ---------------------------------------------------------------------
+   8. RENDERING
+   --------------------------------------------------------------------- */
+function createArrowIcon(direction) {
+  const el = document.createElement("div");
+  el.className = `arrow-icon dir-${direction}`;
+  el.innerHTML =
+    '<svg class="arrow-svg" viewBox="0 0 100 100" aria-hidden="true">' +
+    '<polygon points="15,10 85,50 15,90 32,50"></polygon>' +
+    "</svg>";
+  return el;
+}
+
+function renderSequence() {
+  arrowContainer.innerHTML = "";
+  currentStratagem.seq.forEach((dir, i) => {
+    const icon = createArrowIcon(dir);
+    if (i === 0) icon.classList.add("next");
+    arrowContainer.appendChild(icon);
+  });
+
+  const meta = CATEGORY_META[currentStratagem.type];
+  categoryBadge.textContent = meta.label;
+  categoryBadge.className = `category-badge ${meta.className}`;
+  stratagemName.textContent = currentStratagem.name;
+
+  applyIconToElement(currentStratagem, stratagemIcon, stratagemIconFallback, "main");
+}
+
+function renderPreviews() {
+  if (activeWaveQueue.length > 0) {
+    next1El.classList.remove("hidden");
+    next1Name.textContent = activeWaveQueue[0].name;
+    applyIconToElement(activeWaveQueue[0], next1Icon, null, "next1");
+  } else {
+    next1El.classList.add("hidden");
+  }
+
+  if (activeWaveQueue.length > 1) {
+    next2El.classList.remove("hidden");
+    next2Name.textContent = activeWaveQueue[1].name;
+    applyIconToElement(activeWaveQueue[1], next2Icon, null, "next2");
+  } else {
+    next2El.classList.add("hidden");
+  }
+}
+
+function updateHUD() {
+  scoreEl.textContent = score;
+  comboEl.textContent = combo;
+  clearedEl.textContent = cleared;
+  sessionBestEl.textContent = sessionBest;
+  waveEl.textContent = waveNumber;
+  timeEl.textContent = Math.max(0, Math.ceil(waveTimeLeft));
+
+  const pct = Math.max(0, Math.min(100, (waveTimeLeft / waveTimeAllotted) * 100));
+  waveTimerFill.style.width = `${pct}%`;
+  waveTimerFill.classList.toggle("low", waveTimeLeft <= LOW_TIME_THRESHOLD);
+}
+
+function renderGameOver() {
+  finalScoreEl.textContent = score;
+  finalWaveEl.textContent = waveNumber;
+  finalComboEl.textContent = bestCombo;
+  finalClearedEl.textContent = cleared;
+  finalSessionBestEl.textContent = sessionBest;
+}
+
+function flashError() {
+  stageFrame.classList.remove("shake", "flash-error");
+  void stageFrame.offsetWidth;
+  stageFrame.classList.add("shake", "flash-error");
+  setTimeout(() => stageFrame.classList.remove("shake", "flash-error"), 420);
+}
+
+function flashSuccess() {
+  stageFrame.classList.remove("flash-success");
+  void stageFrame.offsetWidth;
+  stageFrame.classList.add("flash-success");
+  setTimeout(() => stageFrame.classList.remove("flash-success"), 420);
+}
+
+/* ---------------------------------------------------------------------
+   9. GAME FLOW
+   --------------------------------------------------------------------- */
+function initIdlePreview() {
+  refillBag();
+  waveNumber = 1;
+  generateWave();
+  updateHUD();
+}
 
 function startGame() {
-  gameState = "playing"; score = 0; waveNumber = 1; waveTimeLeft = waveTimeMax; cleared = 0;
-  UI.mainMenu.classList.add("hidden"); UI.gameOver.classList.add("hidden");
-  UI.containers.forEach(c => c.classList.remove("active-mode"));
+  ensureAudioCtx();
+  gameState = "playing";
+  score = 0;
+  combo = 0;
+  bestCombo = 0;
+  cleared = 0;
   
-  if(currentMode === "hero" || currentMode === "critical") document.getElementById("heroContainer").classList.add("active-mode");
-  else document.getElementById(`${currentMode}Container`).classList.add("active-mode");
+  refillBag();
+  waveNumber = 1;
+  generateWave();
+  
+  currentStep = 0;
+
+  updateHUD();
+
+  idleOverlay.classList.add("hidden");
+  gameOverOverlay.classList.add("hidden");
+  stageFrame.classList.remove("time-low");
 
   clearInterval(timerId);
-  timerId = setInterval(() => {
-    waveTimeLeft -= 0.1;
-    if(waveTimeLeft <= 3) sfx.tick();
-    if(waveTimeLeft <= 0) { waveTimeLeft = 0; endGame(); }
-    UI.time.textContent = Math.ceil(waveTimeLeft);
-    UI.timerFill.style.width = `${(waveTimeLeft/waveTimeMax)*100}%`;
-  }, 100);
-  
-  generateTask();
+  timerId = setInterval(tickWaveTimer, TICK_INTERVAL_MS);
+  sfx.start();
+}
+
+function tickWaveTimer() {
+  const wasLow = waveTimeLeft <= LOW_TIME_THRESHOLD;
+  const prevWhole = Math.ceil(waveTimeLeft);
+
+  waveTimeLeft -= (TICK_INTERVAL_MS / 1000) * speedMultiplier;
+
+  if (waveTimeLeft <= 0) {
+    waveTimeLeft = 0;
+    updateHUD();
+    endGame();
+    return;
+  }
+
+  const isLow = waveTimeLeft <= LOW_TIME_THRESHOLD;
+  if (isLow) {
+    stageFrame.classList.add("time-low");
+    if (!wasLow || Math.ceil(waveTimeLeft) !== prevWhole) sfx.tick();
+  } else {
+    stageFrame.classList.remove("time-low");
+  }
+
   updateHUD();
 }
 
 function endGame() {
-  gameState = "gameover"; clearInterval(timerId);
-  if(score > highscores[currentMode]) highscores[currentMode] = score;
-  document.getElementById("finalScore").textContent = score;
-  document.getElementById("finalWave").textContent = waveNumber;
-  UI.gameOver.classList.remove("hidden");
-  playTone(300, 0.5, "sawtooth", 0.2);
+  gameState = "gameover";
+  clearInterval(timerId);
+  stageFrame.classList.remove("time-low");
+  if (score > sessionBest) sessionBest = score;
+  updateHUD();
+  renderGameOver();
+  gameOverOverlay.classList.remove("hidden");
+  sfx.gameOver();
 }
 
-function successRoute() {
-  score += 100 + (waveNumber * 10); cleared++; waveNumber++;
-  waveTimeLeft = Math.min(waveTimeMax, waveTimeLeft + TIME_ADD);
-  sfx.complete(); updateHUD(); generateTask();
-}
-
-function failRoute() { sfx.wrong(); }
-function updateHUD() { UI.score.textContent = score; UI.wave.textContent = waveNumber; UI.cleared.textContent = cleared; }
-
-/* --- Mode Generators --- */
-function generateTask() {
+function completeStratagem() {
+  const gained = Math.round(currentStratagem.seq.length * 50 * (1 + Math.min(combo, 20) * 0.15));
+  score += gained;
+  combo += 1;
+  bestCombo = Math.max(bestCombo, combo);
+  cleared += 1;
   currentStep = 0;
-  if(currentMode === "hero") initHero(STRATAGEMS);
-  if(currentMode === "critical") initHero(STRATAGEMS.filter(s => s.type === "mission"));
-  if(currentMode === "qte") initQTE();
-  if(currentMode === "grid") initGrid();
-  if(currentMode === "decoder") initDecoder();
-  if(currentMode === "pipes") initPipes();
-}
 
-/* 1. Hero / Critical Inputs */
-function initHero(pool) {
-  activeTarget = pool[Math.floor(Math.random() * pool.length)];
-  const ac = document.getElementById("arrow-container"); ac.innerHTML = "";
-  activeTarget.seq.forEach((dir, i) => {
-    const el = document.createElement("div"); el.className = `arrow-icon dir-${dir} ${i===0?'next':''}`;
-    el.innerHTML = '<svg class="arrow-svg" viewBox="0 0 100 100"><polygon points="15,10 85,50 15,90 32,50"></polygon></svg>';
-    ac.appendChild(el);
-  });
-  document.getElementById("stratagemName").textContent = activeTarget.name;
-}
+  waveTimeLeft = Math.min(waveTimeMax, waveTimeLeft + TIME_ADD_ON_CLEAR);
 
-/* 2. Combat QTE */
-const situations = [
-  { p: "Bile Titan Approaching!", a: "Orbital Railcannon Strike" },
-  { p: "Out of Ammo!", a: "Resupply" },
-  { p: "Dropships Incoming!", a: "Eagle Airstrike" },
-  { p: "Need to extract!", a: "Reinforce" }
-];
-function initQTE() {
-  const sit = situations[Math.floor(Math.random() * situations.length)];
-  document.getElementById("qtePrompt").textContent = sit.p;
-  
-  let options = [sit.a];
-  while(options.length < 4) {
-    let r = STRATAGEMS[Math.floor(Math.random() * STRATAGEMS.length)].name;
-    if(!options.includes(r)) options.push(r);
-  }
-  options.sort(() => Math.random() - 0.5);
-  
-  const container = document.getElementById("qteButtons"); container.innerHTML = "";
-  options.forEach(opt => {
-    let btn = document.createElement("button"); btn.className = "qte-btn"; btn.textContent = opt;
-    btn.onclick = () => { if(opt === sit.a) successRoute(); else failRoute(); };
-    container.appendChild(btn);
-  });
-}
+  updateHUD();
+  flashSuccess();
+  sfx.complete();
 
-/* 3. Grid Targeting */
-function initGrid() {
-  const cols = ['A','B','C','D','E'];
-  const targetCol = cols[Math.floor(Math.random()*5)];
-  const targetRow = Math.floor(Math.random()*5)+1;
-  const targetId = targetCol + targetRow;
-  document.getElementById("gridPrompt").textContent = `Target Coordinate: ${targetId}`;
-  
-  const gb = document.getElementById("gridBoard"); gb.innerHTML = "";
-  for(let r=1; r<=5; r++) {
-    for(let c=0; c<5; c++) {
-      let cell = document.createElement("div");
-      let id = cols[c] + r; cell.className = "grid-cell"; cell.textContent = id;
-      cell.onclick = () => { if(id === targetId) successRoute(); else failRoute(); };
-      gb.appendChild(cell);
+  setTimeout(() => {
+    if (gameState === "playing") {
+      if (activeWaveQueue.length === 0) {
+        waveNumber += 1;
+        sfx.waveUp();
+        generateWave();
+      } else {
+        currentStratagem = activeWaveQueue.shift();
+        renderSequence();
+        renderPreviews();
+      }
     }
+  }, transitionDelayForWave(waveNumber));
+}
+
+function handleCorrectInput() {
+  const icons = arrowContainer.querySelectorAll(".arrow-icon");
+  icons[currentStep].classList.remove("next");
+  icons[currentStep].classList.add("completed");
+  sfx.correctStep(currentStep);
+  currentStep += 1;
+  if (currentStep < icons.length) {
+    icons[currentStep].classList.add("next");
+  }
+  if (currentStep === currentStratagem.seq.length) {
+    completeStratagem();
   }
 }
 
-/* 4. Automaton Decoder */
-function initDecoder() {
-  const dirs = ['up','down','left','right'];
-  const symbols = { up:'▲', down:'▼', left:'◀', right:'▶' };
-  activeTarget = Array.from({length: 5}, () => dirs[Math.floor(Math.random()*4)]);
-  
-  const db = document.getElementById("decoderBoard"); db.innerHTML = "";
-  activeTarget.forEach((d, i) => {
-    let el = document.createElement("div"); el.className = `decode-char ${i===0?'active':''}`;
-    el.textContent = symbols[d]; db.appendChild(el);
+function handleWrongInput() {
+  combo = 0;
+  currentStep = 0;
+  const icons = arrowContainer.querySelectorAll(".arrow-icon");
+  icons.forEach((icon, i) => {
+    icon.classList.remove("completed");
+    icon.classList.toggle("next", i === 0);
   });
+  updateHUD();
+  flashError();
+  sfx.wrong();
 }
 
-/* 5. Pump Control (Pipes) */
-let pipeGrid = [];
-function initPipes() {
-  const chars = ['║','═','╔','╗','╝','╚']; 
-  const pb = document.getElementById("pipeBoard"); pb.innerHTML = "";
-  pipeGrid = [];
-  
-  // 3x3 layout. We assign random pieces, but ensure 2 are 'blocked'.
-  // Simplified logic: the user must match a hardcoded orientation for a pre-solved path.
-  let solutionAngles = [1, 0, 1, 0, 1, 0, 1, 0, 1]; // required rotation states (0-3)
-  
-  let blocked1 = 1 + Math.floor(Math.random()*3); // non-start/end
-  let blocked2 = 5 + Math.floor(Math.random()*3);
-  
-  for(let i=0; i<9; i++) {
-    let type = chars[Math.floor(Math.random()*chars.length)];
-    let currentRot = Math.floor(Math.random()*4);
-    let isBlocked = (i === blocked1 || i === blocked2);
-    
-    let cell = document.createElement("div");
-    cell.className = `pipe-cell ${isBlocked ? 'blocked' : ''}`;
-    cell.textContent = type;
-    cell.style.transform = `rotate(${currentRot * 90}deg)`;
-    
-    cell.onclick = () => {
-      if(isBlocked || gameState !== "playing") return failRoute();
-      currentRot = (currentRot + 1) % 4;
-      cell.style.transform = `rotate(${currentRot * 90}deg)`;
-      sfx.tick(); checkPipes();
-    };
-    pipeGrid.push({ el: cell, req: solutionAngles[i], getRot: () => currentRot });
-    pb.appendChild(cell);
+function handleDirection(direction) {
+  if (gameState !== "playing" || !currentStratagem) return;
+  const expected = currentStratagem.seq[currentStep];
+  if (direction === expected) {
+    handleCorrectInput();
+  } else {
+    handleWrongInput();
   }
-}
-function checkPipes() {
-  // Simple check: do all unblocked nodes match their required 'solution' state?
-  let win = pipeGrid.every(p => p.el.classList.contains("blocked") || p.getRot() === p.req);
-  if(win) successRoute();
 }
 
-/* --- Input Handling --- */
-const keyMap = { ArrowUp: "up", w: "up", ArrowDown: "down", s: "down", ArrowLeft: "left", a: "left", ArrowRight: "right", d: "right" };
-document.addEventListener("keydown", (e) => {
-  if (gameState !== "playing") return;
-  const dir = keyMap[e.key]; if(!dir) return;
-  
-  if (currentMode === "hero" || currentMode === "critical") {
-    if (dir === activeTarget.seq[currentStep]) {
-      const icons = document.getElementById("arrow-container").children;
-      icons[currentStep].classList.replace("next", "completed");
-      sfx.correct(); currentStep++;
-      if (currentStep < icons.length) icons[currentStep].classList.add("next");
-      else successRoute();
-    } else { currentStep = 0; Array.from(document.getElementById("arrow-container").children).forEach((el, i) => { el.className = `arrow-icon dir-${activeTarget.seq[i]} ${i===0?'next':''}`; }); failRoute(); }
+/* ---------------------------------------------------------------------
+   10. INPUT
+   --------------------------------------------------------------------- */
+const keyMap = {
+  ArrowUp: "up", w: "up", W: "up",
+  ArrowDown: "down", s: "down", S: "down",
+  ArrowLeft: "left", a: "left", A: "left",
+  ArrowRight: "right", d: "right", D: "right",
+};
+
+document.addEventListener("keydown", (event) => {
+  if ((event.key === "Enter" || event.key === " ") && gameState !== "playing") {
+    event.preventDefault();
+    startGame();
+    return;
   }
-  
-  if (currentMode === "decoder") {
-    if (dir === activeTarget[currentStep]) {
-      const chars = document.getElementById("decoderBoard").children;
-      chars[currentStep].classList.replace("active", "done");
-      sfx.correct(); currentStep++;
-      if(currentStep < chars.length) chars[currentStep].classList.add("active");
-      else successRoute();
-    } else failRoute();
-  }
+  const direction = keyMap[event.key];
+  if (!direction) return;
+  event.preventDefault();
+  handleDirection(direction);
 });
-document.querySelectorAll(".dpad-btn").forEach(btn => btn.addEventListener("click", () => document.dispatchEvent(new KeyboardEvent('keydown', { key: btn.dataset.dir }))));
 
-// Boot
-document.getElementById("totalCount").textContent = STRATAGEMS.length;
-openMenu();
+dpad.querySelectorAll(".dpad-btn").forEach((btn) => {
+  btn.addEventListener("click", () => handleDirection(btn.dataset.dir));
+});
+
+startBtn.addEventListener("click", startGame);
+restartBtn.addEventListener("click", startGame);
+
+/* ---------------------------------------------------------------------
+   11. BOOT
+   --------------------------------------------------------------------- */
+totalCountEl.textContent = STRATAGEMS.length;
+loadManifest();
+initIdlePreview();
