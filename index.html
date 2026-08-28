@@ -181,14 +181,20 @@
         <div class="wave-timer-track"><div id="flowClockFill" class="wave-timer-fill"></div></div>
 
         <p class="mode-prompt">
-            Slide the vertical rows to reconnect the flow.
-            <span class="hd-muted">A row's right edge feeds the next row's left. Two rows are bolted down.</span>
+            Slide the vertical rows to carry the flow from the intake to the outlet.
+            <span class="hd-muted">Flow only enters on the marked intake line. A row's right edge feeds the next row's left. Two rows are bolted down.</span>
         </p>
 
         <div class="flow-stage">
-            <div id="flowStartPort" class="flow-port-col" aria-label="Start port"></div>
-            <div id="flowBoard" class="flow-board" role="grid" aria-label="Pipe array"></div>
-            <div id="flowFinishPort" class="flow-port-col" aria-label="Finish port"></div>
+            <div id="flowStartPort" class="flow-port-col" aria-label="Intake port"></div>
+            <div id="flowBoard" class="flow-board" role="group" aria-label="Pipe array"></div>
+            <div id="flowFinishPort" class="flow-port-col" aria-label="Outlet port"></div>
+            <span class="flow-port-cap">In</span>
+            <span class="flow-legend">
+                <b class="legend-live"></b> carrying flow &nbsp;
+                <b class="legend-break"></b> break
+            </span>
+            <span class="flow-port-cap">Out</span>
         </div>
 
         <p class="control-hint"><b>A</b>/<b>D</b> select row · <b>W</b>/<b>S</b> slide it · or use the arrows</p>
@@ -196,7 +202,7 @@
         <div id="flowIdleOverlay" class="overlay">
             <h1>Flow Regulation</h1>
             <p>E-710 line integrity compromised. Reconnect it before pressure drops.</p>
-            <p class="hd-muted">Start feeds in on the left, Finish draws off on the right — always on a different line.</p>
+            <p class="hd-muted">The intake feeds in on the left, the outlet draws off on the right — always on a different line. Pipes that miss the intake carry nothing.</p>
             <button id="flowStartBtn">Start</button>
             <button class="ghost-btn" data-exit>Terminal</button>
         </div>
@@ -230,12 +236,18 @@
 
         <div class="desc-stage">
             <div class="desc-side">
-                <p class="panel-label" data-tip="Reference pattern. Match each symbol to this line.">Pattern</p>
-                <div id="descReference" class="desc-reference"></div>
+                <p class="panel-label" data-tip="Reference pattern. Each symbol names the line it belongs on.">Pattern</p>
+                <div class="desc-ruled is-pattern">
+                    <div class="line-ruler" aria-hidden="true"><i>1</i><i>2</i><i>3</i><i>4</i><i>5</i></div>
+                    <div id="descReference" class="desc-reference"></div>
+                </div>
             </div>
             <div class="desc-side">
                 <p class="panel-label">Array</p>
-                <div id="descBoard" class="desc-board"></div>
+                <div class="desc-ruled">
+                    <div class="line-ruler" aria-hidden="true"><i>1</i><i>2</i><i>3</i><i>4</i><i>5</i></div>
+                    <div id="descBoard" class="desc-board"></div>
+                </div>
             </div>
         </div>
 
@@ -245,7 +257,7 @@
             <h1>Signal Descrambler</h1>
             <p>Automaton transmission intercepted. Realign the array to match it.</p>
             <p class="hd-muted">The pattern stays on screen the whole round. You are not being asked to remember it.</p>
-            <p class="loadout-label">Signal set — pick five</p>
+            <p class="loadout-label">Signal set — pick five <span id="descLoadoutCount" class="loadout-count">5 of 5</span></p>
             <div id="descLoadout" class="desc-loadout"></div>
             <button id="descStartBtn">Start</button>
             <button class="ghost-btn" data-exit>Terminal</button>
