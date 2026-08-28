@@ -518,12 +518,15 @@ button:hover { background: var(--hd-amber); }
 
 /* ==========================================================================
    FLOW REGULATION
+   The port columns share the board's grid row and stretch to it, then trim the
+   shift-button gutters back off with their own margins. That is what makes
+   port slot N sit on pipe line N — sizing them independently put every marker
+   in the top fifth of the board.
    ========================================================================== */
 .flow-stage {
     display: grid;
-    grid-template-columns: 14px 1fr 14px;
+    grid-template-columns: 28px 1fr 28px;
     gap: 6px;
-    align-items: start;
     max-width: 360px;
     margin: 0 auto;
 }
@@ -531,20 +534,50 @@ button:hover { background: var(--hd-amber); }
 .flow-port-col {
     display: grid;
     grid-template-rows: repeat(5, 1fr);
-    margin-top: calc(var(--shift-h) + 4px);
-    aspect-ratio: 1 / 5;
+    margin: calc(var(--shift-h) + 4px) 0;
 }
 
 .flow-port-slot { position: relative; }
 
-.flow-port-live::before {
+/* Dead ports are racks, the same idiom as an empty pipe cell. */
+.flow-port-slot::before {
     content: "";
     position: absolute;
-    top: 50%; left: 0; right: 0;
-    height: 4px;
+    top: 50%; left: 50%;
+    width: 3px; height: 3px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: var(--hd-olive);
+    opacity: .5;
+}
+
+/* The live port is a pipe stub on the same gauge as the artwork (18/100). */
+.flow-port-live::before {
+    left: 0; right: 0;
+    width: auto;
+    height: 18%;
+    min-height: 3px;
     transform: translateY(-50%);
-    background: var(--hd-cyan);
     border-radius: 2px;
+    background: var(--hd-cyan);
+    opacity: 1;
+    box-shadow: 0 0 6px rgba(79, 195, 217, .45);
+    transition: background .16s linear, box-shadow .16s linear;
+}
+
+/* Reach across the stage gap so each stub meets the board edge. */
+#flowStartPort  .flow-port-live::before { margin-right: -6px; }
+#flowFinishPort .flow-port-live::before { margin-left: -6px; }
+
+/* Nothing on the first row is taking the intake. */
+#flowStartPort.is-blocked .flow-port-live::before {
+    background: var(--hd-amber);
+    box-shadow: none;
+}
+
+#flowFinishPort.is-fed .flow-port-live::before {
+    background: var(--hd-green);
+    box-shadow: 0 0 8px rgba(111, 191, 74, .55);
 }
 
 #flowFinishPort.near-miss .flow-port-live::before {
@@ -555,6 +588,30 @@ button:hover { background: var(--hd-amber); }
     0%, 100% { background: var(--hd-cyan); }
     50%      { background: var(--hd-amber); }
 }
+
+.flow-port-cap {
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    font-size: 9px;
+    color: var(--hd-muted);
+    text-align: center;
+    padding-top: 3px;
+}
+
+.flow-legend {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding-top: 3px;
+    font-size: 10px;
+    color: var(--hd-muted);
+}
+
+.flow-legend b { width: 12px; height: 3px; border-radius: 2px; }
+.legend-live  { background: var(--hd-amber); }
+.legend-break { background: var(--hd-red); }
 
 .flow-board {
     display: grid;
@@ -588,20 +645,59 @@ button:hover { background: var(--hd-amber); }
     justify-content: center;
 }
 
-.pipe-svg { width: 100%; height: 100%; display: block; }
+.pipe-cell { transition: color .16s linear; }
+.pipe-svg { width: 100%; height: 100%; display: block; transition: filter .16s linear; }
 
-.pipe-rack {
+.pipe-rack, .glyph-rung {
     width: 3px; height: 3px;
     background: var(--hd-olive);
     border-radius: 50%;
     opacity: .5;
 }
 
-.pipe-cell.on-path { color: var(--hd-green); }
-.pipe-cell.on-path .pipe-svg { filter: drop-shadow(0 0 4px var(--hd-green)); }
+/* Amber marks the run the flow actually makes. Seeing it stop dead at the
+   intake is what teaches that the intake line is the only way in. */
+.pipe-cell.is-flowing { color: var(--hd-amber); }
+.pipe-cell.is-flowing .pipe-svg { filter: drop-shadow(0 0 3px var(--hd-amber)); }
+
+/* Green sweeps the finished line from the intake outwards. */
+.flow-board.is-solved .pipe-cell.is-flowing {
+    color: var(--hd-green);
+    transition-delay: calc(var(--flow-i, 0) * 18ms);
+}
+.flow-board.is-solved .pipe-cell.is-flowing .pipe-svg {
+    filter: drop-shadow(0 0 5px var(--hd-green));
+    transition-delay: calc(var(--flow-i, 0) * 18ms);
+}
+
+/* Where the flow stops. */
+.pipe-cell.is-break::after {
+    content: "";
+    position: absolute;
+    inset: 16%;
+    border: 2px solid var(--hd-red);
+    border-radius: 50%;
+    opacity: .6;
+}
+
+/* ...or where it runs out of the window entirely. */
+.flow-row.leak-top::before,
+.flow-row.leak-bottom::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0;
+    height: 3px;
+    background: var(--hd-red);
+    opacity: .65;
+    z-index: 2;
+}
+.flow-row.leak-top::before  { top: 0; }
+.flow-row.leak-bottom::after { bottom: 0; }
 
 /* ==========================================================================
    SIGNAL DESCRAMBLER
+   Pattern and array are drawn on identical geometry and share a numbered
+   ruler, so "line 3" means the same height on both sides.
    ========================================================================== */
 .desc-stage {
     display: grid;
@@ -610,43 +706,113 @@ button:hover { background: var(--hd-amber); }
     align-items: start;
 }
 
-.desc-reference {
+.desc-ruled {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 3px;
-    background: var(--hd-void);
-    border: 1px solid var(--hd-olive);
-    border-radius: 2px;
-    padding: 3px;
-    margin-top: calc(var(--shift-h) + 4px);
+    grid-template-columns: 15px 1fr;
+    gap: 5px;
 }
 
-.ref-col { display: grid; grid-template-rows: repeat(5, 1fr); gap: 3px; }
-
-.ref-slot {
-    aspect-ratio: 1 / 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--hd-panel);
-    border-radius: 2px;
-    font-size: 14px;
+.line-ruler {
+    display: grid;
+    grid-template-rows: repeat(5, 1fr);
+    margin: calc(var(--shift-h) + 4px) 0;   /* clear the shift-button gutters */
+    font-family: var(--font-display);
+    font-size: 10px;
     color: var(--hd-muted);
 }
 
+.line-ruler i {
+    font-style: normal;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 3px;
+    border-right: 1px solid rgba(63, 74, 58, .55);
+}
+
+/* The pattern has no shift buttons, so it drops to where the windows start. */
+.desc-reference {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 4px;
+    margin: calc(var(--shift-h) + 4px) 0;
+}
+
+.ref-col {
+    display: grid;
+    grid-template-rows: repeat(5, 1fr);
+    aspect-ratio: 1 / 5;
+    overflow: hidden;
+    background: var(--hd-void);
+    border: 1px solid var(--hd-olive);
+    border-radius: 2px;
+}
+
+.ref-slot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    color: var(--hd-muted);
+    border-bottom: 1px solid rgba(63, 74, 58, .35);
+}
+.ref-slot:last-child { border-bottom: none; }
+
 .ref-slot.ref-mark {
     background: var(--hd-raised);
-    border: 1px solid var(--hd-primary);
     color: var(--hd-primary);
+    box-shadow: inset 0 0 0 1px var(--hd-primary);
+    transition: color .16s linear, box-shadow .16s linear;
+}
+
+/* Which mark belongs to the row you are holding. The symbol already says so —
+   this only saves the player from hunting for it. */
+.ref-slot.ref-mark.is-cued { box-shadow: inset 0 0 0 2px var(--hd-cyan); }
+
+.ref-slot.ref-mark.is-aligned {
+    color: var(--hd-green);
+    box-shadow: inset 0 0 0 1px var(--hd-green);
 }
 
 .desc-board { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
 
 .glyph-cell { font-size: 15px; color: var(--hd-body); }
-.glyph-cell.has-glyph { color: var(--hd-primary); }
+.glyph-cell.has-glyph { color: var(--hd-primary); transition: color .16s linear; }
 
 .desc-col.is-aligned .desc-row { border-color: var(--hd-green); }
 .desc-col.is-aligned .glyph-cell.has-glyph { color: var(--hd-green); }
+
+.desc-board.is-solved .desc-row { box-shadow: 0 0 8px rgba(111, 191, 74, .35); }
+
+/* Points at a symbol slid out of the window, so an apparently empty row is
+   never a dead end. */
+.desc-peek {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.desc-peek > span {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    display: none;
+    font-size: 11px;
+    color: var(--hd-amber);
+    animation: peekNudge 1.4s ease-in-out infinite;
+}
+
+.desc-peek > .peek-up   { top: 3px; }
+.desc-peek > .peek-down { bottom: 3px; }
+
+.desc-row.peek-up   .desc-peek > .peek-up   { display: block; }
+.desc-row.peek-down .desc-peek > .peek-down { display: block; }
+
+@keyframes peekNudge {
+    0%, 100% { opacity: .45; }
+    50%      { opacity: 1; }
+}
 
 .loadout-label {
     margin-top: 14px !important;
@@ -655,6 +821,8 @@ button:hover { background: var(--hd-amber); }
     text-transform: uppercase;
     letter-spacing: .08em;
 }
+
+.loadout-count { color: var(--hd-primary); }
 
 .desc-loadout {
     display: grid;
@@ -765,7 +933,8 @@ button:hover { background: var(--hd-amber); }
    ========================================================================== */
 @media (max-width: 560px) {
     .desc-stage { grid-template-columns: 1fr; gap: 12px; }
-    .desc-reference { margin-top: 0; }
+    .desc-reference,
+    .is-pattern .line-ruler { margin: 0; }
     .hud { font-size: 11px; gap: 4px 10px; }
     .menu-title { font-size: 21px; }
     .hd-panel { padding: 44px 14px 20px; }
@@ -784,5 +953,6 @@ button:hover { background: var(--hd-amber); }
         animation-duration: .01ms !important;
         animation-iteration-count: 1 !important;
         transition-duration: .01ms !important;
+        transition-delay: 0s !important;   /* land the win state at once */
     }
 }

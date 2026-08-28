@@ -1,7 +1,9 @@
 /* ==========================================================================
    FLOW REGULATION — E-710 pipe puzzle (DESIGN_SPEC.md §2)
    Five VERTICAL rows slide up and down. A row's right edge feeds the next
-   row's left edge. Start and Finish sit on opposing sides at different Y.
+   row's left edge. The INTAKE and the OUTLET are fixed, marked, and always on
+   different lines: pressure enters on the intake line or it does not enter at
+   all, and it has to leave the last row on the outlet line.
    Two rows are locked, always already at their solution offset, which makes
    every generated board solvable.
    ========================================================================== */
@@ -26,7 +28,7 @@ const PIPE_PATHS = {
 };
 
 function pipeSvg(type) {
-  if (type === "EMPTY") return '<span class="pipe-rack"></span>';
+  if (type === "EMPTY" || !PIPE_PATHS[type]) return '<span class="pipe-rack"></span>';
   return (
     '<svg class="pipe-svg" viewBox="0 0 100 100" aria-hidden="true">' +
     `<path d="${PIPE_PATHS[type]}" fill="none" stroke="currentColor" ` +
@@ -36,41 +38,57 @@ function pipeSvg(type) {
 
 /* ---------------------------------------------------------------------
    COMPLETION DETECTION — a trace, not a flood fill
+   Always begins at the intake line entering from the west, so a board whose
+   first row has nothing on that line carries no flow at all. The result
+   reports how far the flow actually got, which is what the board paints.
    --------------------------------------------------------------------- */
 function traceFlow(board) {
   const path = [];
   let y = board.startY;
   let enteredFrom = "W";
 
-  const fail = (reachedRow, deadEndY) => ({ complete: false, reachedRow, deadEndY, path });
+  const stoppedAt = (row, wy) => ({
+    complete: false, path, breakRow: row,
+    breakY: wy, leak: wy < 0 ? "top" : wy >= WINDOW_H ? "bottom" : null,
+  });
 
   for (let c = 0; c < ROW_COUNT; c++) {
     const row = board.rows[c];
-    let guard = 0;
+    let handedOff = false;
 
-    while (true) {
-      if (++guard > WINDOW_H + 1) return fail(c, y);
-      if (y < 0 || y >= WINDOW_H) return fail(c, y);
+    /* A 2-port pipe never doubles back, so a row can be crossed in at most
+       WINDOW_H steps — past that the flow has left the window. */
+    for (let step = 0; step < WINDOW_H; step++) {
+      if (y < 0 || y >= WINDOW_H) return stoppedAt(c, y);
 
-      const ports = PORTS[cellAt(row, y)];
-      if (!ports.includes(enteredFrom)) return fail(c, y);
+      const ports = PORTS[cellAt(row, y)] || PORTS.EMPTY;
+      if (!ports.includes(enteredFrom)) return stoppedAt(c, y);
 
       path.push([c, y]);
       const exit = ports.find((p) => p !== enteredFrom);
 
-      if (exit === "E") { enteredFrom = "W"; break; } // hand off to the next row
-      y += exit === "S" ? 1 : -1;                     // travel within this row
+      if (exit === "E") { enteredFrom = "W"; handedOff = true; break; } // next row
+
+      /* A pipe that bends back west is a dead end — flow does not re-enter the
+         row it came from. Folding W in with N would light a run through pipes
+         that visibly do not join. */
+      if (exit !== "N" && exit !== "S") return stoppedAt(c, y);
+      y += exit === "S" ? 1 : -1;                                       // within this row
       enteredFrom = OPPOSITE[exit];
     }
+
+    if (!handedOff) return stoppedAt(c, y);
   }
 
   return y === board.finishY
-    ? { complete: true, path }
+    ? { complete: true, path, exitY: y }
     : { complete: false, nearMiss: true, exitY: y, path };
 }
 
 /* ---------------------------------------------------------------------
    GENERATION — guaranteed solvable
+   The solution is laid down first, from the intake line to the outlet line,
+   then buried under decoys and scrambled.
    --------------------------------------------------------------------- */
 function generateFlowBoard() {
   let startY, finishY;
@@ -109,21 +127,17 @@ function generateFlowBoard() {
     y = exitY;
   }
 
-  shuffled([0, 1, 2, 3, 4]).slice(0, LOCKED_ROWS).forEach((i) => {
-    rows[i].locked = true;
-    rows[i].offset = rows[i].solutionOffset;
-  });
+  lockRandomRows(rows);
 
   const board = { rows, startY, finishY };
+  const unlocked = rows.filter((r) => !r.locked);
 
   // Scramble unlocked rows; never hand the player a board that is already done.
-  for (let attempt = 0; attempt < 10; attempt++) {
-    rows.forEach((r) => {
-      if (!r.locked) {
-        let o;
-        do { o = randInt(0, MAX_OFFSET); } while (o === r.solutionOffset && MAX_OFFSET > 0);
-        r.offset = o;
-      }
+  for (let attempt = 0; attempt < 12; attempt++) {
+    unlocked.forEach((r) => {
+      let o;
+      do { o = randInt(0, MAX_OFFSET); } while (o === r.solutionOffset && MAX_OFFSET > 0);
+      r.offset = o;
     });
     if (!traceFlow(board).complete) break;
   }
@@ -143,6 +157,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let board = null;
   let selectedRow = 0;
   let solving = false;
+  let solveTimer = null;
   const rowEls = [];
 
   function firstUnlockedRow() {
@@ -150,14 +165,16 @@ document.addEventListener("DOMContentLoaded", () => {
     return r ? r.index : 0;
   }
 
-  function renderPortColumn(el, y, tip) {
+  function renderPortColumn(el, liveY, tip) {
     el.innerHTML = "";
     for (let i = 0; i < WINDOW_H; i++) {
       const slot = document.createElement("div");
       slot.className = "flow-port-slot";
-      if (i === y) {
+      if (i === liveY) {
         slot.classList.add("flow-port-live");
         slot.dataset.tip = tip;
+        slot.setAttribute("aria-label", `${tip} Line ${liveY + 1}.`);
+        slot.setAttribute("tabindex", "0"); // the tip is reachable by keyboard
       }
       el.appendChild(slot);
     }
@@ -170,6 +187,8 @@ document.addEventListener("DOMContentLoaded", () => {
     board.rows.forEach((row) => {
       const col = document.createElement("div");
       col.className = "flow-col" + (row.locked ? " is-locked" : "");
+      col.setAttribute("role", "group");
+      col.setAttribute("aria-label", `Pipe row ${row.index + 1}`);
 
       const up = document.createElement("button");
       up.type = "button";
@@ -181,7 +200,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const win = document.createElement("div");
       win.className = "flow-row";
-      win.setAttribute("role", "gridcell");
 
       const strip = document.createElement("div");
       strip.className = "flow-strip";
@@ -219,11 +237,11 @@ document.addEventListener("DOMContentLoaded", () => {
       col.appendChild(win);
       col.appendChild(down);
       boardEl.appendChild(col);
-      rowEls.push({ col, strip });
+      rowEls.push({ col, win, strip, cells: Array.from(strip.children) });
     });
 
-    renderPortColumn(startPortEl, board.startY, "Flow enters here.");
-    renderPortColumn(finishPortEl, board.finishY, "Flow must exit here.");
+    renderPortColumn(startPortEl, board.startY, "Intake. Flow enters the first row on this line.");
+    renderPortColumn(finishPortEl, board.finishY, "Outlet. Flow must leave the last row on this line.");
     selectRow(firstUnlockedRow());
     paintPath();
   }
@@ -241,18 +259,52 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  /* Lights the solved run, or pulses the finish port on a near miss. */
+  function clearPaint() {
+    rowEls.forEach((r) => {
+      r.win.classList.remove("leak-top", "leak-bottom");
+      r.cells.forEach((cell) => {
+        cell.classList.remove("is-flowing", "is-break");
+        cell.style.removeProperty("--flow-i");
+      });
+    });
+    boardEl.classList.remove("is-solved");
+    startPortEl.classList.remove("is-blocked");
+    finishPortEl.classList.remove("is-fed");
+  }
+
+  /* Paints the run the flow actually makes, not just the winning one. Seeing
+     the amber stop dead at the intake is what teaches that the intake line is
+     the only way in. */
   function paintPath() {
-    boardEl.querySelectorAll(".pipe-cell.on-path").forEach((c) => c.classList.remove("on-path"));
+    clearPaint();
     const result = traceFlow(board);
 
-    if (result.complete) {
-      result.path.forEach(([c, y], i) => {
-        const cell = rowEls[c].strip.children[board.rows[c].offset + y];
-        setTimeout(() => cell && cell.classList.add("on-path"), i * 40);
-      });
+    result.path.forEach(([c, y], i) => {
+      const cell = rowEls[c].cells[board.rows[c].offset + y];
+      if (!cell) return;
+      cell.classList.add("is-flowing");
+      cell.style.setProperty("--flow-i", i); // drives the staggered win sweep
+    });
+
+    if (result.leak) {
+      rowEls[result.breakRow].win.classList.add(`leak-${result.leak}`);
+    } else if (result.breakRow !== undefined) {
+      const cell = rowEls[result.breakRow].cells[board.rows[result.breakRow].offset + result.breakY];
+      if (cell) cell.classList.add("is-break");
     }
-    finishPortEl.classList.toggle("near-miss", !!result.nearMiss);
+
+    if (result.path.length === 0) startPortEl.classList.add("is-blocked");
+    if (result.complete) {
+      boardEl.classList.add("is-solved");
+      finishPortEl.classList.add("is-fed");
+    }
+
+    /* Restart the pulse every time, or a second near miss in a row is silent. */
+    finishPortEl.classList.remove("near-miss");
+    if (result.nearMiss) {
+      void finishPortEl.offsetWidth;
+      finishPortEl.classList.add("near-miss");
+    }
     return result;
   }
 
@@ -268,14 +320,19 @@ document.addEventListener("DOMContentLoaded", () => {
     if (result.complete) {
       solving = true;
       flowMode.correct(6);
-      setTimeout(() => {
+      clearTimeout(solveTimer);
+      solveTimer = setTimeout(() => {
+        solveTimer = null;
         solving = false;
         if (flowMode.active) newBoard();
-      }, 700);
+      }, 820); // long enough for the green sweep to reach the outlet
     }
   }
 
   function newBoard() {
+    clearTimeout(solveTimer);
+    solveTimer = null;
+    solving = false;
     board = generateFlowBoard();
     renderBoard();
   }
@@ -283,11 +340,12 @@ document.addEventListener("DOMContentLoaded", () => {
   document.addEventListener("keydown", (e) => {
     if (!flowMode.active || solving) return;
     if (stageEl.classList.contains("hidden")) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || !e.key) return;
     const k = e.key.toLowerCase();
-    if (k === "a" || e.key === "ArrowLeft") { e.preventDefault(); stepSelection(-1); }
-    else if (k === "d" || e.key === "ArrowRight") { e.preventDefault(); stepSelection(1); }
-    else if (k === "w" || e.key === "ArrowUp") { e.preventDefault(); doShift(selectedRow, "UP"); }
-    else if (k === "s" || e.key === "ArrowDown") { e.preventDefault(); doShift(selectedRow, "DOWN"); }
+    if (k === "a" || k === "arrowleft") { e.preventDefault(); stepSelection(-1); }
+    else if (k === "d" || k === "arrowright") { e.preventDefault(); stepSelection(1); }
+    else if (k === "w" || k === "arrowup") { e.preventDefault(); doShift(selectedRow, "UP"); }
+    else if (k === "s" || k === "arrowdown") { e.preventDefault(); doShift(selectedRow, "DOWN"); }
   });
 
   const flowMode = createTimedRoundMode({
@@ -307,6 +365,8 @@ document.addEventListener("DOMContentLoaded", () => {
     startBtn: document.getElementById("flowStartBtn"),
     restartBtn: document.getElementById("flowRestartBtn"),
     onNewRound: newBoard,
+    // A solve pending when the clock runs out must not rebuild the next round.
+    onStop: () => { clearTimeout(solveTimer); solveTimer = null; solving = false; },
   });
 
   newBoard(); // idle preview

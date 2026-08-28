@@ -110,6 +110,25 @@ function shiftRow(row, dir) {
   return true;
 }
 
+/* Bolts LOCKED_ROWS rows down at the offset their solution needs. This is what
+   makes a generated board solvable: the locked rows are already right, and
+   every other row can always be slid back to its own solutionOffset. */
+function lockRandomRows(rows) {
+  shuffled(rows.map((_, i) => i)).slice(0, LOCKED_ROWS).forEach((i) => {
+    rows[i].locked = true;
+    rows[i].offset = rows[i].solutionOffset;
+  });
+}
+
+/* Strip offsets that keep strip index `stripIndex` inside the window. */
+function offsetsShowing(stripIndex) {
+  const lo = Math.max(0, stripIndex - (WINDOW_H - 1));
+  const hi = Math.min(MAX_OFFSET, stripIndex);
+  const out = [];
+  for (let o = lo; o <= hi; o++) out.push(o);
+  return out;
+}
+
 /* Applies the strip translation. Strip is STRIP_H tall inside a WINDOW_H
    window, so one cell of travel is (100 / STRIP_H)% of the strip. */
 function applyStripOffset(stripEl, offset) {
@@ -197,7 +216,7 @@ function createTimedRoundMode(cfg) {
     modeKey, timeStart, timeMax, bonusOnCorrect,
     timeEl, scoreEl, bestEl, timerFill, stageEl,
     idleOverlay, overOverlay, finalScoreEl, finalBestEl,
-    startBtn, restartBtn, onNewRound, onEnd,
+    startBtn, restartBtn, onNewRound, onEnd, onStop,
   } = cfg;
 
   let timeLeft = timeStart;
@@ -232,8 +251,24 @@ function createTimedRoundMode(cfg) {
   function stop() {
     active = false;
     clearInterval(timerId);
+    timerId = null;
+    if (onStop) onStop();
   }
-  registerModeStopper(stop);
+
+  /* Leaving mid-round has to leave the mode startable again. Without this the
+     screen keeps a frozen clock and no overlay, so coming back to it is a
+     dead end with no way to start another run. */
+  function abort() {
+    if (!active) return stop();
+    stop();
+    timeLeft = timeStart;
+    score = 0;
+    if (stageEl) stageEl.classList.remove("time-low");
+    if (overOverlay) overOverlay.classList.add("hidden");
+    if (idleOverlay) idleOverlay.classList.remove("hidden");
+    updateHud();
+  }
+  registerModeStopper(abort);
 
   function start() {
     if (typeof ensureAudioCtx === "function") ensureAudioCtx();
