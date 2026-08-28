@@ -1,10 +1,11 @@
 /* ==========================================================================
    SIGNAL DESCRAMBLER — Automaton pattern replication (DESIGN_SPEC.md §3)
    NOT a memory game. The reference pattern is on screen for the whole round.
-   The player slides vertical rows until each symbol sits on the line the
-   reference demands. The reference lists its symbols in a DIFFERENT order
-   than the array, so the player must match by symbol identity, not position —
-   which is why both panels are ruled with the same numbered lines.
+   Pattern column N is array column N — a symbol in the first vertical row of
+   the array is shown in the first vertical row of the pattern — so the two
+   panels can be read straight across on the same numbered lines. The puzzle
+   is entirely vertical: slide each row until its symbol sits on the line the
+   pattern calls for.
    ========================================================================== */
 
 const GLYPH_PALETTE = ["\u25C6", "\u25B2", "\u25A0", "\u2716", "\u25CF",
@@ -66,14 +67,7 @@ function generateDescramblerBoard(glyphs) {
     r.offset = choice(spawnable);
   });
 
-  // The reference must never list its symbols in the board's own order, or the
-  // player can solve it positionally instead of by symbol identity.
-  let referenceOrder;
-  do {
-    referenceOrder = shuffled(rows.map((_, i) => i));
-  } while (referenceOrder.every((v, i) => v === i));
-
-  return { rows, referenceOrder };
+  return { rows };
 }
 
 function isRowAligned(row) {
@@ -146,17 +140,17 @@ document.addEventListener("DOMContentLoaded", () => {
     renderLoadout();
   }
 
-  /* ---- reference panel: always visible, deliberately reordered ---- */
+  /* ---- reference panel: always visible, column-for-column with the array ---- */
   function renderReference() {
     refEl.innerHTML = "";
     refMarks.length = 0;
 
-    board.referenceOrder.forEach((rowIndex) => {
-      const row = board.rows[rowIndex];
+    board.rows.forEach((row) => {
       const col = document.createElement("div");
       col.className = "ref-col";
       col.setAttribute("role", "img");
-      col.setAttribute("aria-label", `${row.symbol} belongs on line ${row.targetY + 1}`);
+      col.setAttribute("aria-label",
+        `Column ${row.index + 1}: ${row.symbol} belongs on line ${row.targetY + 1}`);
 
       for (let y = 0; y < WINDOW_H; y++) {
         const slot = document.createElement("div");
@@ -164,7 +158,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (y === row.targetY) {
           slot.classList.add("ref-mark");
           slot.textContent = row.symbol;
-          refMarks[rowIndex] = slot;
+          refMarks[row.index] = slot;
         }
         col.appendChild(slot);
       }
@@ -253,8 +247,8 @@ document.addEventListener("DOMContentLoaded", () => {
   function selectRow(index) {
     selectedRow = index;
     rowEls.forEach((r, i) => r.col.classList.toggle("is-selected", i === index));
-    /* Calling out which reference mark belongs to the selected row is a
-       reading aid, not a solve aid — the symbol already says which one. */
+    /* Marks the column you are holding on the pattern side too, so the eye
+       does not lose its place crossing between the panels. */
     refMarks.forEach((mark, i) => mark && mark.classList.toggle("is-cued", i === index));
   }
 

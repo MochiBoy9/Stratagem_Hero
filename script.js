@@ -142,6 +142,7 @@ const waveEl = document.getElementById("wave");
 const waveTimerFill = document.getElementById("waveTimerFill");
 const categoryBadge = document.getElementById("categoryBadge");
 const stratagemName = document.getElementById("stratagemName");
+const heroScreen = document.getElementById("stratagemHeroScreen");
 const stageFrame = document.getElementById("stageFrame");
 const idleOverlay = document.getElementById("idleOverlay");
 const gameOverOverlay = document.getElementById("gameOverOverlay");
@@ -382,13 +383,31 @@ function generateWave() {
   renderSequence();
   renderPreviews();
 
-  if (gameState === "playing" && typeof window.maybeTriggerLz === "function") {
-    window.maybeTriggerLz(waveNumber, waveTimeLeft);
+  if (gameState === "playing") maybeTriggerRunEvent();
+}
+
+/* ---------------------------------------------------------------------
+   RUN EVENTS — interrupts that overlay a live wave
+   An event registers itself rather than being wired in by name, so which
+   event owns the interrupt slot is the event's business, not this file's.
+   maybeTrigger returns true when it took the slot.
+   --------------------------------------------------------------------- */
+window.RunEvent = { active: false };
+const runEvents = [];
+
+window.registerRunEvent = function (event) {
+  runEvents.push(event);
+};
+
+function maybeTriggerRunEvent() {
+  if (window.RunEvent.active) return;
+  for (const ev of shuffled(runEvents)) {
+    if (ev.maybeTrigger && ev.maybeTrigger(waveNumber, waveTimeLeft)) return;
   }
 }
 
-/* Landing Zone event reward. The wave clock never stopped, so this is a
-   refund of the time the event cost, not free time. */
+/* Run-event reward. The wave clock never stopped, so this is a refund of the
+   time the event cost, not free time. */
 window.grantWaveTime = function (seconds) {
   if (gameState !== "playing") return;
   waveTimeLeft = Math.min(waveTimeMax, waveTimeLeft + seconds);
@@ -463,8 +482,7 @@ function renderGameOver() {
   finalClearedEl.textContent = cleared;
   finalSessionBestEl.textContent = sessionBest;
 
-  const lzEl = document.getElementById("finalLz");
-  if (lzEl && window.LZ) lzEl.textContent = window.LZ.confirmed;
+  runEvents.forEach((ev) => ev.renderStat && ev.renderStat());
 }
 
 function flashError() {
@@ -499,7 +517,7 @@ function startGame() {
   bestCombo = 0;
   cleared = 0;
   
-  if (typeof window.resetLzSession === "function") window.resetLzSession();
+  runEvents.forEach((ev) => ev.reset && ev.reset());
 
   refillBag();
   waveNumber = 1;
@@ -546,6 +564,9 @@ function endGame() {
   gameState = "gameover";
   clearInterval(timerId);
   stageFrame.classList.remove("time-low");
+  /* A call still on screen would stack over the game-over card and keep
+     holding the keyboard, so it is dismissed before anything is rendered. */
+  runEvents.forEach((ev) => ev.dismiss && ev.dismiss());
   if (score > sessionBest) sessionBest = score;
   if (typeof saveHighScore === "function") saveHighScore("stratagemHero", score);
   updateHUD();
@@ -611,7 +632,7 @@ function handleWrongInput() {
 }
 
 function handleDirection(direction) {
-  if (window.LZ && window.LZ.active) return;   // LZ event owns the keys while open
+  if (window.RunEvent.active) return;   // an open run event owns the keys
   if (gameState !== "playing" || !currentStratagem) return;
   const expected = currentStratagem.seq[currentStep];
   if (direction === expected) {
@@ -632,7 +653,11 @@ const keyMap = {
 };
 
 document.addEventListener("keydown", (event) => {
-  if (window.LZ && window.LZ.active) return;   // LZ event owns the keys while open
+  /* This listener is on document, so without a screen check every other mode's
+     keys reach it — Landing Zone's Enter would quietly boot a run behind the
+     screen the player is actually looking at, clock and all. */
+  if (heroScreen.classList.contains("hidden")) return;
+  if (window.RunEvent.active) return;   // an open run event owns the keys
   if ((event.key === "Enter" || event.key === " ") && gameState !== "playing") {
     event.preventDefault();
     startGame();
