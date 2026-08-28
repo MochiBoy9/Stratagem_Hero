@@ -272,7 +272,7 @@ let manifest = null;
 let manifestLoaded = false;
 let manifestLoadingPromise = null;
 
-// Multi-token tracker so async loaders don't overwrite each other
+// Multi-token tracker so async loaders don't overwrite each other.
 const iconTokens = { main: 0, next1: 0, next2: 0 };
 
 function loadManifest() {
