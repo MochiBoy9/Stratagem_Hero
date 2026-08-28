@@ -39,9 +39,14 @@
             <span class="mode-desc">Realign the array to match the intercepted pattern.</span>
             <span class="mode-foot">Best <b data-score="descrambler">0</b></span>
         </button>
+        <button class="mode-card" data-mode="lzScreen">
+            <span class="mode-name">Landing Zone Confirmation</span>
+            <span class="mode-desc">Walk the cursor onto the called grid reference and confirm it.</span>
+            <span class="mode-foot">Best <b data-score="landingZone">0</b></span>
+        </button>
     </div>
 
-    <p class="menu-note">Landing Zone Confirmation deploys as a live event during Stratagem Hero.</p>
+    <p class="menu-note">Emergency Deploy also runs as a live event during Stratagem Hero.</p>
 </section>
 
 
@@ -94,28 +99,19 @@
             </div>
         </div>
 
-        <!-- LANDING ZONE EVENT — overlays the run, does not replace it -->
-        <div id="lzOverlay" class="overlay lz-overlay hidden" aria-live="assertive">
-            <p class="lz-label">Confirm landing zone</p>
-            <p class="lz-call" id="lzCall">D5</p>
-            <div class="lz-bar-track"><div id="lzBar" class="lz-bar"></div></div>
-            <div id="lzGrid" class="lz-grid"></div>
-            <p class="lz-hint">Move with <b>WASD</b> — confirm with <b>Enter</b>. +5s on confirmation; the clock does not stop.</p>
-            <div id="lzPad" class="dpad lz-pad">
-                <button class="dpad-btn" data-dir="up">W</button>
-                <div class="dpad-row">
-                    <button class="dpad-btn" data-dir="left">A</button>
-                    <button class="dpad-btn" data-dir="down">S</button>
-                    <button class="dpad-btn" data-dir="right">D</button>
-                </div>
-                <button id="lzConfirmBtn" class="lz-confirm">Confirm</button>
-            </div>
+        <!-- EMERGENCY DEPLOY EVENT — overlays the run, does not replace it -->
+        <div id="edOverlay" class="overlay ed-overlay hidden" aria-live="assertive">
+            <p class="ed-label">Emergency deploy</p>
+            <p class="ed-call" id="edCall">Awaiting radio call.</p>
+            <div class="ed-bar-track"><div id="edBar" class="ed-bar"></div></div>
+            <div id="edOptions" class="ed-options"></div>
+            <p class="ed-hint">Pick with <b>1</b>/<b>2</b>, <b>A</b>/<b>D</b>, or tap. +5s on the right call; the clock does not stop.</p>
         </div>
 
         <div id="idleOverlay" class="overlay">
             <h1>Stratagem Hero</h1>
             <p><b id="totalCount">0</b> stratagems loaded.</p>
-            <p class="hd-muted">Landing Zone events may interrupt the run from wave 2.</p>
+            <p class="hd-muted">Emergency Deploy calls may interrupt the run from wave 2.</p>
             <button id="startBtn">Start</button>
             <button class="ghost-btn" data-exit>Terminal</button>
         </div>
@@ -126,7 +122,7 @@
             <p>Wave reached <b id="finalWave">1</b></p>
             <p>Max combo <b id="finalCombo">0</b></p>
             <p>Cleared <b id="finalCleared">0</b></p>
-            <p>LZs confirmed <b id="finalLz">0</b></p>
+            <p>Deploys answered <b id="finalEd">0</b></p>
             <p>Session best <b id="finalSessionBest">0</b></p>
             <button id="restartBtn">Play again</button>
             <button class="ghost-btn" data-exit>Terminal</button>
@@ -231,12 +227,12 @@
 
         <p class="mode-prompt">
             Slide each row until its symbol sits on the line the pattern calls for.
-            <span class="hd-muted">Match by symbol, not by position — the pattern is listed in a different order.</span>
+            <span class="hd-muted">Column for column: the pattern's first row is the array's first row. Only the vertical position is scrambled.</span>
         </p>
 
         <div class="desc-stage">
             <div class="desc-side">
-                <p class="panel-label" data-tip="Reference pattern. Each symbol names the line it belongs on.">Pattern</p>
+                <p class="panel-label" data-tip="Reference pattern. Read straight across: column N here is column N of the array.">Pattern</p>
                 <div class="desc-ruled is-pattern">
                     <div class="line-ruler" aria-hidden="true"><i>1</i><i>2</i><i>3</i><i>4</i><i>5</i></div>
                     <div id="descReference" class="desc-reference"></div>
@@ -272,6 +268,54 @@
     </div>
 </section>
 
+
+<!-- ================= LANDING ZONE CONFIRMATION ================= -->
+<section id="lzScreen" class="screen hidden" aria-label="Landing Zone Confirmation">
+    <div class="hd-panel">
+        <button class="hd-back" data-exit aria-label="Back to terminal">Terminal</button>
+
+        <div class="hud">
+            <span class="hd-stat">Time <b id="lzTime">40</b></span>
+            <span class="hd-stat">Confirmed <b id="lzScore">0</b></span>
+            <span class="hd-stat">Best <b id="lzBest">0</b></span>
+        </div>
+        <div class="wave-timer-track"><div id="lzClockFill" class="wave-timer-fill"></div></div>
+
+        <p class="mode-prompt">
+            Walk the cursor onto the called reference and confirm it.
+            <span class="hd-muted">Move with <b>WASD</b>, the arrows, or the pad. Confirm with <b>Enter</b> or the button. The cells themselves are not clickable.</span>
+        </p>
+
+        <p class="lz-label">Confirm landing zone</p>
+        <p class="lz-call" id="lzCall">D5</p>
+        <div id="lzGrid" class="lz-grid"></div>
+
+        <div id="lzPad" class="dpad lz-pad">
+            <button class="dpad-btn" data-dir="up">W</button>
+            <div class="dpad-row">
+                <button class="dpad-btn" data-dir="left">A</button>
+                <button class="dpad-btn" data-dir="down">S</button>
+                <button class="dpad-btn" data-dir="right">D</button>
+            </div>
+            <button id="lzConfirmBtn" class="lz-confirm">Confirm</button>
+        </div>
+
+        <div id="lzIdleOverlay" class="overlay">
+            <h1>Landing Zone Confirmation</h1>
+            <p>Command calls a grid reference. Put the cursor on it and confirm.</p>
+            <p class="hd-muted">A correct confirmation buys time. A wrong one costs you the clock you spent walking there.</p>
+            <button id="lzStartBtn">Start</button>
+            <button class="ghost-btn" data-exit>Terminal</button>
+        </div>
+        <div id="lzOverOverlay" class="overlay hidden">
+            <h1>Beacon Lost</h1>
+            <p>Confirmed <b id="lzFinalScore">0</b></p>
+            <p>Best <b id="lzFinalBest">0</b></p>
+            <button id="lzRestartBtn">Try again</button>
+            <button class="ghost-btn" data-exit>Terminal</button>
+        </div>
+    </div>
+</section>
 
 <script src="common.js"></script>
 <script src="script.js"></script>

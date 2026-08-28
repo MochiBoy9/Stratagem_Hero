@@ -1,38 +1,30 @@
 /* ==========================================================================
-   LANDING ZONE CONFIRMATION — pop-up event inside Stratagem Hero
-   (DESIGN_SPEC.md §4)
-   Not a standalone mode. Cursor moves with WASD / arrows and commits with
-   Enter or Space. Clicking a cell does nothing by design. The wave clock
-   keeps running throughout — success refunds the time it cost.
+   LANDING ZONE CONFIRMATION — standalone mode
+   Command calls a grid reference; the player walks a cursor onto it and
+   confirms. The cursor always spawns a few cells away, so every call costs
+   real movement — that walk is the whole mode, which is why the cells are
+   not clickable. A correct confirmation refunds the clock it burned.
    ========================================================================== */
 
 const LZ_COLS = ["A", "B", "C", "D", "E", "F"];
 const LZ_ROWS = [1, 2, 3, 4, 5, 6];
-const LZ_WINDOW_MS = 6000;
-const LZ_REWARD_S = 5;
-const LZ_CHANCE = 0.2;
-const LZ_MIN_WAVE = 2;
-const LZ_COOLDOWN_WAVES = 2;
-const LZ_MIN_CLOCK_S = 4;
-
-/* Shared flag. script.js reads window.LZ.active to yield the keyboard. */
-window.LZ = { active: false, confirmed: 0 };
+const LZ_MIN_WALK = 3;      // Chebyshev distance from spawn to target
+const LZ_REWARD_S = 4;
 
 document.addEventListener("DOMContentLoaded", () => {
-  const overlay = document.getElementById("lzOverlay");
+  const stageEl = document.getElementById("lzScreen");
   const gridEl = document.getElementById("lzGrid");
   const callEl = document.getElementById("lzCall");
-  const barEl = document.getElementById("lzBar");
   const confirmBtn = document.getElementById("lzConfirmBtn");
 
+  const LAST = LZ_COLS.length - 1;
   let cursor = { col: 0, row: 0 };
   let target = { col: 0, row: 0 };
   let cells = {};
-  let timeoutId = null;
-  let rafId = null;
-  let lastWave = -99;
+  let resolving = false;
+  let roundTimer = null;
 
-  const randomCell = () => ({ col: randInt(0, 5), row: randInt(0, 5) });
+  const randomCell = () => ({ col: randInt(0, LAST), row: randInt(0, LAST) });
   const chebyshev = (a, b) => Math.max(Math.abs(a.col - b.col), Math.abs(a.row - b.row));
   const label = (c) => `${LZ_COLS[c.col]}${LZ_ROWS[c.row]}`;
 
@@ -64,7 +56,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function paint() {
-    Object.values(cells).forEach((c) => c.classList.remove("lz-cursor", "lz-target"));
+    Object.values(cells).forEach((c) =>
+      c.classList.remove("lz-cursor", "lz-target", "lz-hit", "lz-miss"));
     const cur = cells[`${cursor.col},${cursor.row}`];
     if (cur) cur.classList.add("lz-cursor");
   }
@@ -73,102 +66,85 @@ document.addEventListener("DOMContentLoaded", () => {
     const t = cells[`${target.col},${target.row}`];
     if (t) t.classList.add("lz-target");
     const cur = cells[`${cursor.col},${cursor.row}`];
-    if (cur) cur.classList.toggle(hit ? "lz-hit" : "lz-miss", true);
+    if (cur) cur.classList.add(hit ? "lz-hit" : "lz-miss");
   }
 
-  function animateBar(startedAt) {
-    const step = () => {
-      const pct = Math.max(0, 100 - ((Date.now() - startedAt) / LZ_WINDOW_MS) * 100);
-      barEl.style.width = pct + "%";
-      if (pct > 0 && window.LZ.active) rafId = requestAnimationFrame(step);
-    };
-    step();
-  }
-
-  function open() {
-    window.LZ.active = true;
+  function newRound() {
+    clearTimeout(roundTimer);
+    roundTimer = null;
+    resolving = false;
     target = randomCell();
-    do { cursor = randomCell(); } while (chebyshev(cursor, target) < 3);
-
-    buildGrid();
+    do { cursor = randomCell(); } while (chebyshev(cursor, target) < LZ_MIN_WALK);
+    if (!Object.keys(cells).length) buildGrid();
     paint();
     callEl.textContent = label(target);
-    overlay.classList.remove("hidden");
-    animateBar(Date.now());
-    if (typeof sfx !== "undefined" && sfx.waveUp) sfx.waveUp();
-
-    clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => close(false, true), LZ_WINDOW_MS);
-  }
-
-  /* silent = the player never answered (timeout or mode exit). Expiring is
-     already punished by the clock; it doesn't also get an error sting. */
-  function close(success, silent) {
-    clearTimeout(timeoutId);
-    cancelAnimationFrame(rafId);
-    window.LZ.active = false; // ALWAYS clears — a stuck flag soft-locks the run
-    overlay.classList.add("hidden");
-
-    if (success) {
-      window.LZ.confirmed += 1;
-      if (typeof window.grantWaveTime === "function") window.grantWaveTime(LZ_REWARD_S);
-      if (typeof sfx !== "undefined" && sfx.complete) sfx.complete();
-    } else if (!silent && typeof sfx !== "undefined" && sfx.wrong) {
-      sfx.wrong();
-    }
   }
 
   function commit() {
+    if (!lzMode.active || resolving) return;
+    resolving = true;
     const hit = cursor.col === target.col && cursor.row === target.row;
     revealTarget(hit);
-    setTimeout(() => close(hit, false), 260);
+    if (hit) lzMode.correct(LZ_REWARD_S);
+    else lzMode.wrong();
+
+    clearTimeout(roundTimer);
+    roundTimer = setTimeout(() => {
+      roundTimer = null;
+      resolving = false;
+      if (lzMode.active) newRound();
+    }, 420);
   }
 
   function moveCursor(dir) {
+    if (!lzMode.active || resolving) return;
     if (dir === "up") cursor.row = Math.max(0, cursor.row - 1);
-    else if (dir === "down") cursor.row = Math.min(5, cursor.row + 1);
+    else if (dir === "down") cursor.row = Math.min(LAST, cursor.row + 1);
     else if (dir === "left") cursor.col = Math.max(0, cursor.col - 1);
-    else if (dir === "right") cursor.col = Math.min(5, cursor.col + 1);
+    else if (dir === "right") cursor.col = Math.min(LAST, cursor.col + 1);
     paint();
     if (typeof sfx !== "undefined" && sfx.tick) sfx.tick();
   }
 
-  /* Capture phase so this runs before Stratagem Hero's own listener. */
+  const DIRS = { arrowup: "up", w: "up", arrowdown: "down", s: "down",
+                 arrowleft: "left", a: "left", arrowright: "right", d: "right" };
+
   document.addEventListener("keydown", (e) => {
-    if (!window.LZ.active) return;
-    const dir = { ArrowUp: "up", w: "up", ArrowDown: "down", s: "down",
-                  ArrowLeft: "left", a: "left", ArrowRight: "right", d: "right" }[
-      e.key.length === 1 ? e.key.toLowerCase() : e.key
-    ];
-    if (dir) { e.preventDefault(); e.stopPropagation(); moveCursor(dir); return; }
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      e.stopPropagation();
-      commit();
-    }
-  }, true);
+    if (!lzMode.active) return;
+    if (stageEl.classList.contains("hidden")) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || !e.key) return;
+
+    const dir = DIRS[e.key.toLowerCase()];
+    if (dir) { e.preventDefault(); moveCursor(dir); return; }
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); commit(); }
+  });
 
   confirmBtn.addEventListener("click", commit); // touch parity
   document.getElementById("lzPad").querySelectorAll("[data-dir]").forEach((btn) => {
-    btn.addEventListener("click", () => { if (window.LZ.active) moveCursor(btn.dataset.dir); });
+    btn.addEventListener("click", () => moveCursor(btn.dataset.dir));
   });
 
-  /* Trigger hook — called by script.js at the start of each wave. */
-  window.maybeTriggerLz = function (waveNumber, waveTimeLeft) {
-    if (window.LZ.active) return;
-    if (waveNumber < LZ_MIN_WAVE) return;
-    if (waveNumber - lastWave < LZ_COOLDOWN_WAVES) return;
-    if (waveTimeLeft < LZ_MIN_CLOCK_S) return;
-    if (Math.random() > LZ_CHANCE) return;
-    lastWave = waveNumber;
-    open();
-  };
+  const lzMode = createTimedRoundMode({
+    modeKey: "landingZone",
+    timeStart: 40,
+    timeMax: 55,
+    bonusOnCorrect: LZ_REWARD_S,
+    timeEl: document.getElementById("lzTime"),
+    scoreEl: document.getElementById("lzScore"),
+    bestEl: document.getElementById("lzBest"),
+    timerFill: document.getElementById("lzClockFill"),
+    stageEl,
+    idleOverlay: document.getElementById("lzIdleOverlay"),
+    overOverlay: document.getElementById("lzOverOverlay"),
+    finalScoreEl: document.getElementById("lzFinalScore"),
+    finalBestEl: document.getElementById("lzFinalBest"),
+    startBtn: document.getElementById("lzStartBtn"),
+    restartBtn: document.getElementById("lzRestartBtn"),
+    onNewRound: newRound,
+    // A resolve pending when the clock runs out must not deal the next call.
+    onStop: () => { clearTimeout(roundTimer); roundTimer = null; resolving = false; },
+  });
 
-  window.resetLzSession = function () {
-    lastWave = -99;
-    window.LZ.confirmed = 0;
-    if (window.LZ.active) close(false, true);
-  };
-
-  registerModeStopper(() => { if (window.LZ.active) close(false, true); });
+  buildGrid();
+  newRound(); // idle preview
 });

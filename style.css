@@ -850,10 +850,77 @@ button:hover { background: var(--hd-amber); }
 }
 
 /* ==========================================================================
-   LANDING ZONE EVENT
+   EMERGENCY DEPLOY — as a run event
+   The overlay dims the wave behind it rather than replacing the screen: the
+   wave clock is still running and the player needs to feel that.
    ========================================================================== */
-.lz-overlay { background: rgba(14, 17, 16, .97); }
+.ed-overlay { background: rgba(14, 17, 16, .97); }
 
+.ed-label {
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    letter-spacing: .14em;
+    font-size: 11px;
+    color: var(--hd-muted);
+    margin: 0;
+}
+
+.ed-call {
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.35;
+    color: var(--hd-primary);
+    margin: 6px 0 10px;
+    max-width: 280px;
+}
+
+.ed-bar-track {
+    width: 190px;
+    height: 4px;
+    background: var(--hd-void);
+    border: 1px solid var(--hd-olive);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 14px;
+}
+
+.ed-bar { height: 100%; width: 100%; background: var(--hd-amber); }
+
+.ed-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: min(84vw, 300px);
+}
+
+.ed-options .qte-option { margin: 0; }
+
+.ed-option-key {
+    flex: none;
+    width: 20px; height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    font-size: 11px;
+    color: var(--hd-muted);
+    background: var(--hd-void);
+    border: 1px solid var(--hd-olive);
+    border-radius: 2px;
+}
+
+.ed-hint {
+    font-size: 11px;
+    color: var(--hd-muted);
+    margin: 12px 0 0;
+    max-width: 260px;
+    line-height: 1.4;
+}
+.ed-hint b { color: var(--hd-primary); }
+
+/* ==========================================================================
+   LANDING ZONE CONFIRMATION — standalone mode
+   ========================================================================== */
 .lz-label {
     font-family: var(--font-display);
     text-transform: uppercase;
@@ -869,26 +936,15 @@ button:hover { background: var(--hd-amber); }
     font-weight: 700;
     color: var(--hd-primary);
     letter-spacing: .1em;
-    margin: 2px 0 8px;
+    margin: 2px 0 10px;
 }
-
-.lz-bar-track {
-    width: 190px;
-    height: 4px;
-    background: var(--hd-void);
-    border: 1px solid var(--hd-olive);
-    border-radius: 2px;
-    overflow: hidden;
-    margin-bottom: 12px;
-}
-
-.lz-bar { height: 100%; width: 100%; background: var(--hd-amber); }
 
 .lz-grid {
     display: grid;
     grid-template-columns: 18px repeat(6, 1fr);
     gap: 3px;
-    width: min(78vw, 230px);
+    width: min(78vw, 250px);
+    margin: 0 auto;
 }
 
 .lz-head {
@@ -916,16 +972,7 @@ button:hover { background: var(--hd-amber); }
 .lz-cell.lz-hit    { background: var(--hd-wash-ok); border-color: var(--hd-green); box-shadow: inset 0 0 0 2px var(--hd-green); }
 .lz-cell.lz-miss   { background: var(--hd-wash-bad); border-color: var(--hd-red); box-shadow: inset 0 0 0 2px var(--hd-red); }
 
-.lz-hint {
-    font-size: 11px;
-    color: var(--hd-muted);
-    margin: 12px 0 0;
-    max-width: 250px;
-    line-height: 1.4;
-}
-.lz-hint b { color: var(--hd-primary); }
-
-.lz-pad { margin-top: 10px; }
+.lz-pad { margin-top: 12px; }
 .lz-confirm { margin-top: 8px; padding: 8px 18px; font-size: 12px; min-height: 40px; }
 
 /* ==========================================================================

@@ -61,7 +61,7 @@ document.addEventListener("click", (e) => {
 
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
-  if (window.LZ && window.LZ.active) return; // the event owns Esc while open
+  if (window.RunEvent && window.RunEvent.active) return; // an open run event owns Esc
   if (!document.getElementById("mainMenu").classList.contains("hidden")) return;
   showScreen("mainMenu");
 });
