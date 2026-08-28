@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Earth Training Terminal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Saira:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ================= TERMINAL MENU ================= -->
+<section id="mainMenu" class="screen menu-screen" aria-label="Training terminal">
+    <header class="menu-head">
+        <h1 class="menu-title">Super Earth Training Terminal</h1>
+        <p class="menu-sub">Select a simulation</p>
+    </header>
+
+    <div class="mode-grid">
+        <button class="mode-card" data-mode="stratagemHeroScreen">
+            <span class="mode-name">Stratagem Hero</span>
+            <span class="mode-desc">Input the call-in codes before the wave clock runs out.</span>
+            <span class="mode-foot">Best <b data-score="stratagemHero">0</b></span>
+        </button>
+        <button class="mode-card" data-mode="qteScreen">
+            <span class="mode-name">Emergency Deploy</span>
+            <span class="mode-desc">Read the call. Pick the right stratagem. Two options, one clock.</span>
+            <span class="mode-foot">Best <b data-score="qte">0</b></span>
+        </button>
+        <button class="mode-card" data-mode="flowScreen">
+            <span class="mode-name">Flow Regulation</span>
+            <span class="mode-desc">Slide the vertical rows to reconnect the E-710 line.</span>
+            <span class="mode-foot">Best <b data-score="flow">0</b></span>
+        </button>
+        <button class="mode-card" data-mode="descScreen">
+            <span class="mode-name">Signal Descrambler</span>
+            <span class="mode-desc">Realign the array to match the intercepted pattern.</span>
+            <span class="mode-foot">Best <b data-score="descrambler">0</b></span>
+        </button>
+    </div>
+
+    <p class="menu-note">Landing Zone Confirmation deploys as a live event during Stratagem Hero.</p>
+</section>
+
+
+<!-- ================= STRATAGEM HERO ================= -->
+<section id="stratagemHeroScreen" class="screen hidden" aria-label="Stratagem Hero">
+    <div id="stageFrame" class="hd-panel">
+        <button class="hd-back" data-exit aria-label="Back to terminal">Terminal</button>
+
+        <div class="hud">
+            <span class="hd-stat">Wave <b id="wave">1</b></span>
+            <span class="hd-stat">Time <b id="time">10</b></span>
+            <span class="hd-stat">Score <b id="score">0</b></span>
+            <span class="hd-stat">Combo <b id="combo">0</b></span>
+            <span class="hd-stat">Cleared <b id="cleared">0</b></span>
+            <span class="hd-stat">Best <b id="sessionBest">0</b></span>
+        </div>
+
+        <div class="wave-timer-track">
+            <div id="waveTimerFill" class="wave-timer-fill"></div>
+        </div>
+
+        <div id="categoryBadge" class="category-badge">Category</div>
+
+        <div id="stratagemIconWrap" class="stratagem-icon-wrap">
+            <img id="stratagemIcon" class="stratagem-icon" alt="" />
+            <div id="stratagemIconFallback" class="stratagem-icon-fallback">?</div>
+        </div>
+
+        <h2 id="stratagemName">Stratagem Name</h2>
+
+        <div id="arrow-container" class="arrows"></div>
+
+        <div class="next-preview-container">
+            <div class="next-item hidden" id="next1">
+                <img class="preview-icon" id="next1Icon" alt="" />
+                <span id="next1Name"></span>
+            </div>
+            <div class="next-item hidden" id="next2">
+                <img class="preview-icon" id="next2Icon" alt="" />
+                <span id="next2Name"></span>
+            </div>
+        </div>
+
+        <div id="dpad" class="dpad">
+            <button class="dpad-btn" data-dir="up">W</button>
+            <div class="dpad-row">
+                <button class="dpad-btn" data-dir="left">A</button>
+                <button class="dpad-btn" data-dir="down">S</button>
+                <button class="dpad-btn" data-dir="right">D</button>
+            </div>
+        </div>
+
+        <!-- LANDING ZONE EVENT — overlays the run, does not replace it -->
+        <div id="lzOverlay" class="overlay lz-overlay hidden" aria-live="assertive">
+            <p class="lz-label">Confirm landing zone</p>
+            <p class="lz-call" id="lzCall">D5</p>
+            <div class="lz-bar-track"><div id="lzBar" class="lz-bar"></div></div>
+            <div id="lzGrid" class="lz-grid"></div>
+            <p class="lz-hint">Move with <b>WASD</b> — confirm with <b>Enter</b>. +5s on confirmation; the clock does not stop.</p>
+            <div id="lzPad" class="dpad lz-pad">
+                <button class="dpad-btn" data-dir="up">W</button>
+                <div class="dpad-row">
+                    <button class="dpad-btn" data-dir="left">A</button>
+                    <button class="dpad-btn" data-dir="down">S</button>
+                    <button class="dpad-btn" data-dir="right">D</button>
+                </div>
+                <button id="lzConfirmBtn" class="lz-confirm">Confirm</button>
+            </div>
+        </div>
+
+        <div id="idleOverlay" class="overlay">
+            <h1>Stratagem Hero</h1>
+            <p><b id="totalCount">0</b> stratagems loaded.</p>
+            <p class="hd-muted">Landing Zone events may interrupt the run from wave 2.</p>
+            <button id="startBtn">Start</button>
+            <button class="ghost-btn" data-exit>Terminal</button>
+        </div>
+
+        <div id="gameOverOverlay" class="overlay hidden">
+            <h1>Run Ended</h1>
+            <p>Score <b id="finalScore">0</b></p>
+            <p>Wave reached <b id="finalWave">1</b></p>
+            <p>Max combo <b id="finalCombo">0</b></p>
+            <p>Cleared <b id="finalCleared">0</b></p>
+            <p>LZs confirmed <b id="finalLz">0</b></p>
+            <p>Session best <b id="finalSessionBest">0</b></p>
+            <button id="restartBtn">Play again</button>
+            <button class="ghost-btn" data-exit>Terminal</button>
+        </div>
+    </div>
+</section>
+
+
+<!-- ================= EMERGENCY DEPLOY ================= -->
+<section id="qteScreen" class="screen hidden" aria-label="Emergency Deploy">
+    <div class="hd-panel">
+        <button class="hd-back" data-exit aria-label="Back to terminal">Terminal</button>
+
+        <div class="hud">
+            <span class="hd-stat">Time <b id="qteTime">25</b></span>
+            <span class="hd-stat">Deployed <b id="qteScore">0</b></span>
+            <span class="hd-stat">Best <b id="qteBest">0</b></span>
+        </div>
+        <div class="wave-timer-track"><div id="qteClockFill" class="wave-timer-fill"></div></div>
+
+        <p id="qtePrompt" class="mode-prompt">Awaiting radio call.</p>
+        <div id="qteOptions" class="qte-options"></div>
+
+        <div id="qteIdleOverlay" class="overlay">
+            <h1>Emergency Deploy</h1>
+            <p>Read the call and pick the stratagem that answers it.</p>
+            <p class="hd-muted">Correct adds time. Wrong adds nothing — the clock keeps draining.</p>
+            <button id="qteStartBtn">Start</button>
+            <button class="ghost-btn" data-exit>Terminal</button>
+        </div>
+        <div id="qteOverOverlay" class="overlay hidden">
+            <h1>Deployment Ended</h1>
+            <p>Deployed <b id="qteFinalScore">0</b></p>
+            <p>Best <b id="qteFinalBest">0</b></p>
+            <button id="qteRestartBtn">Try again</button>
+            <button class="ghost-btn" data-exit>Terminal</button>
+        </div>
+    </div>
+</section>
+
+
+<!-- ================= FLOW REGULATION ================= -->
+<section id="flowScreen" class="screen hidden" aria-label="Flow Regulation">
+    <div class="hd-panel">
+        <button class="hd-back" data-exit aria-label="Back to terminal">Terminal</button>
+
+        <div class="hud">
+            <span class="hd-stat">Time <b id="flowTime">45</b></span>
+            <span class="hd-stat">Lines <b id="flowScore">0</b></span>
+            <span class="hd-stat">Best <b id="flowBest">0</b></span>
+        </div>
+        <div class="wave-timer-track"><div id="flowClockFill" class="wave-timer-fill"></div></div>
+
+        <p class="mode-prompt">
+            Slide the vertical rows to reconnect the flow.
+            <span class="hd-muted">A row's right edge feeds the next row's left. Two rows are bolted down.</span>
+        </p>
+
+        <div class="flow-stage">
+            <div id="flowStartPort" class="flow-port-col" aria-label="Start port"></div>
+            <div id="flowBoard" class="flow-board" role="grid" aria-label="Pipe array"></div>
+            <div id="flowFinishPort" class="flow-port-col" aria-label="Finish port"></div>
+        </div>
+
+        <p class="control-hint"><b>A</b>/<b>D</b> select row · <b>W</b>/<b>S</b> slide it · or use the arrows</p>
+
+        <div id="flowIdleOverlay" class="overlay">
+            <h1>Flow Regulation</h1>
+            <p>E-710 line integrity compromised. Reconnect it before pressure drops.</p>
+            <p class="hd-muted">Start feeds in on the left, Finish draws off on the right — always on a different line.</p>
+            <button id="flowStartBtn">Start</button>
+            <button class="ghost-btn" data-exit>Terminal</button>
+        </div>
+        <div id="flowOverOverlay" class="overlay hidden">
+            <h1>Line Shut Down</h1>
+            <p>Lines restored <b id="flowFinalScore">0</b></p>
+            <p>Best <b id="flowFinalBest">0</b></p>
+            <button id="flowRestartBtn">Try again</button>
+            <button class="ghost-btn" data-exit>Terminal</button>
+        </div>
+    </div>
+</section>
+
+
+<!-- ================= SIGNAL DESCRAMBLER ================= -->
+<section id="descScreen" class="screen hidden" aria-label="Signal Descrambler">
+    <div class="hd-panel hd-panel-wide">
+        <button class="hd-back" data-exit aria-label="Back to terminal">Terminal</button>
+
+        <div class="hud">
+            <span class="hd-stat">Time <b id="descTime">45</b></span>
+            <span class="hd-stat">Decoded <b id="descScore">0</b></span>
+            <span class="hd-stat">Best <b id="descBest">0</b></span>
+        </div>
+        <div class="wave-timer-track"><div id="descClockFill" class="wave-timer-fill"></div></div>
+
+        <p class="mode-prompt">
+            Slide each row until its symbol sits on the line the pattern calls for.
+            <span class="hd-muted">Match by symbol, not by position — the pattern is listed in a different order.</span>
+        </p>
+
+        <div class="desc-stage">
+            <div class="desc-side">
+                <p class="panel-label" data-tip="Reference pattern. Match each symbol to this line.">Pattern</p>
+                <div id="descReference" class="desc-reference"></div>
+            </div>
+            <div class="desc-side">
+                <p class="panel-label">Array</p>
+                <div id="descBoard" class="desc-board"></div>
+            </div>
+        </div>
+
+        <p class="control-hint"><b>A</b>/<b>D</b> select row · <b>W</b>/<b>S</b> slide it · or use the arrows</p>
+
+        <div id="descIdleOverlay" class="overlay">
+            <h1>Signal Descrambler</h1>
+            <p>Automaton transmission intercepted. Realign the array to match it.</p>
+            <p class="hd-muted">The pattern stays on screen the whole round. You are not being asked to remember it.</p>
+            <p class="loadout-label">Signal set — pick five</p>
+            <div id="descLoadout" class="desc-loadout"></div>
+            <button id="descStartBtn">Start</button>
+            <button class="ghost-btn" data-exit>Terminal</button>
+        </div>
+        <div id="descOverOverlay" class="overlay hidden">
+            <h1>Signal Lost</h1>
+            <p>Decoded <b id="descFinalScore">0</b></p>
+            <p>Best <b id="descFinalBest">0</b></p>
+            <button id="descRestartBtn">Try again</button>
+            <button class="ghost-btn" data-exit>Terminal</button>
+        </div>
+    </div>
+</section>
+
+
+<script src="common.js"></script>
+<script src="script.js"></script>
+<script src="landing.js"></script>
+<script src="qte.js"></script>
+<script src="flow.js"></script>
+<script src="descrambler.js"></script>
+<script src="menu.js"></script>
+</body>
+</html>
